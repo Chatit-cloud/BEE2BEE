@@ -49,10 +49,11 @@ def config(key, value):
 @cli.command()
 @click.option('--model', default='distilgpt2', help='HF Causal LM model name')
 @click.option('--price-per-token', default=0.0, type=float, help='Price per output token')
-@click.option('--host', default=None, help='Bind host (default: auto-detect LAN IP)')
+@click.option('--host', default=None, help='Bind host (default: 0.0.0.0)')
 @click.option('--port', default=None, type=int, help='Bind port (default: random)')
+@click.option('--public-host', default=None, help='Publicly accessible IP/Hostname (if behind NAT/Cloud)')
 @click.option('--bootstrap-link', default=None, help='Bootstrap URL (default: from config)')
-def deploy_hf(model, price_per_token, host, port, bootstrap_link):
+def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link):
     """Deploy a Hugging Face text-generation service on the P2P network."""
     
     # Auto-resolve bootstrap
@@ -68,7 +69,8 @@ def deploy_hf(model, price_per_token, host, port, bootstrap_link):
         port=port, 
         bootstrap_link=bootstrap_link,  # Will use config value
         model_name=model, 
-        price_per_token=price_per_token
+        price_per_token=price_per_token,
+        announce_host=public_host
     ))
 
 

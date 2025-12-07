@@ -18,11 +18,14 @@ console = Console()
 
 
 class P2PNode:
-    def __init__(self, host: str = "0.0.0.0", port: int = 4001):
+    def __init__(self, host: str = "0.0.0.0", port: int = 4001, announce_host: Optional[str] = None):
         self.host = host
         self.port = port
+        self.announce_host = announce_host
         self.peer_id = new_id("peer")
-        self.addr = f"ws://{host}:{port}"
+        
+        # We'll set self.addr after start() once we know the port
+        self.addr = "" 
         self.server: Optional[websockets.server.Serve] = None
         
         # State
@@ -58,8 +61,9 @@ class P2PNode:
         peers_to_check = list(self.peers.items())
         
         # Only log if we have peers to avoid spam
-        if peers_to_check:
-            console.print(f"\n[magenta]🔎 Running Health Check on {len(peers_to_check)} peers...[/magenta]")
+        if len(peers_to_check) > 0:
+             # console.print(f"[dim]Running Health Check on {len(peers_to_check)} peers...[/dim]")
+             pass
         
         for pid, peer_data in peers_to_check:
             ws = peer_data.get("ws")
@@ -89,9 +93,28 @@ class P2PNode:
         async def handler(ws: WebSocketServerProtocol):
             await self._handle_connection(ws)
             
-        console.log(f"[cyan]P2P listening[/cyan] on ws://{self.host}:{self.port}")
+        # console.log(f"[cyan]P2P listening[/cyan] on ws://{self.host}:{self.port}")
         self.server = await websockets.serve(handler, self.host, self.port, max_size=32*1024*1024)
         self._running = True
+        
+        # Resolve actual port if 0
+        if self.port == 0:
+            self.port = self.server.sockets[0].getsockname()[1]
+            
+        # Resolve announce address
+        # If announce_host is set, use it.
+        # Else if host is 0.0.0.0, try to detect LAN IP.
+        # Else use host.
+        if self.announce_host:
+            display_host = self.announce_host
+        elif self.host == "0.0.0.0":
+            from .utils import get_lan_ip
+            display_host = get_lan_ip()
+        else:
+            display_host = self.host
+            
+        self.addr = f"ws://{display_host}:{self.port}"
+        console.log(f"[bold green]P2P Node Started[/bold green] at {self.addr}")
 
     async def stop(self):
         self._running = False
@@ -157,19 +180,26 @@ class P2PNode:
         await self._peer_reader(ws)
 
     async def _peer_reader(self, ws: WebSocketClientProtocol | WebSocketServerProtocol):
+        rem = ws.remote_address
+        console.log(f"[dim]Reader started for {rem}[/dim]")
         try:
             async for raw in ws:
+                # console.log(f"[dim]Received {len(raw)} bytes from {rem}[/dim]")
                 try:
                     data = json.loads(raw)
+                    # console.log(f"[dim]Msg {data.get('type')} from {rem}[/dim]")
                     await self._on_message(ws, data)
                 except json.JSONDecodeError:
+                    console.log(f"[red]Valid JSON expected from {rem}[/red]")
                     continue
                 except Exception as e:
-                    console.log(f"[red]Error handling message:[/red] {e}")
-        except websockets.exceptions.ConnectionClosed:
-            pass
+                    console.log(f"[red]Error handling message from {rem}:[/red] {e}")
+                    import traceback
+                    traceback.print_exc()
+        except websockets.exceptions.ConnectionClosed as e:
+            console.log(f"[yellow]Connection closed {rem}: {e.code} {e.reason}[/yellow]")
         except Exception as e:
-            console.log(f"[red]Connection error:[/red] {e}")
+            console.log(f"[red]Connection error {rem}:[/red] {e}")
         finally:
             await self._on_disconnect(ws)
 
@@ -185,7 +215,8 @@ class P2PNode:
     async def _send(self, ws, obj: Dict[str, Any]):
         try:
             await ws.send(json.dumps(obj))
-        except Exception:
+        except Exception as e:
+            # console.log(f"[dim]Send failed:[/dim] {e}")
             pass
 
     async def _broadcast(self, obj: Dict[str, Any]):
@@ -386,28 +417,20 @@ class P2PNode:
             raise RuntimeError("request_timed_out")
 
 
-async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, bootstrap_link: Optional[str] = None, model_name: Optional[str] = None, price_per_token: Optional[float] = None):
+async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, bootstrap_link: Optional[str] = None, model_name: Optional[str] = None, price_per_token: Optional[float] = None, announce_host: Optional[str] = None):
     from .p2p import generate_join_link
-    from .utils import get_lan_ip
     
-    # Dynamic defaults
-    if not host:
-        host = get_lan_ip()
+    # Defaults
+    if host is None:
+        host = "0.0.0.0" 
         
     if port is None:
         port = 0  # Let OS assign random port
         
-    node = P2PNode(host, port)
+    node = P2PNode(host=host, port=port, announce_host=announce_host)
     await node.start()
     
-    # Update port if it was dynamic (0)
-    actual_port = node.server.sockets[0].getsockname()[1]
-    node.port = actual_port
-    node.addr = f"ws://{host}:{actual_port}"
-    
-    console.print(f"\n[bold green]🚀 ConnectIT P2P Node Started[/bold green]")
-    console.print(f"[cyan]Node ID:[/cyan] {node.peer_id}")
-    console.print(f"[cyan]Address:[/cyan] {node.addr}")
+    # Port/Addr is now auto-resolved by start()
     
     # 1. Start Service Loading (in background/executor to not block loop)
     # We load first, BUT we do it smart. 
@@ -415,7 +438,7 @@ async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, b
     # So we connect first, and the event loop continues running while we load in a thread.
     
     if bootstrap_link:
-        console.print(f"\n[yellow]🔗 Connecting to bootstrap...[/yellow]")
+        console.print(f"\n[yellow]🔗 Connecting to bootstrap...[/yellow] {bootstrap_link}")
         await node.connect_bootstrap(bootstrap_link)
     
     if model_name:

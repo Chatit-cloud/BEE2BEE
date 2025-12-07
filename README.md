@@ -13,76 +13,67 @@ ConnectIT
 
 **A decentralized peer-to-peer network for deploying and accessing AI models.**
 
-ConnectIT behaves like a single giant computer. You configure a **Main Entry Point** once, and all your nodes—whether providers or clients—automatically connect, discover each other, and share work.
-
 ## ✨ Features
 
-- 🌐 **Zero-Config Networking**: Set your Main Point once. No manual IP handling.
-- 👁️ **Supervisor Monitoring**: The Main Point actively monitors network health.
-- 💰 **Automated Economics**: Clients automatically route queries to the cheapest/fastest provider.
-- 🔌 **HTTP API**: Monitor your entire mesh via a REST interface.
+- 🌐 **Zero-Config Networking**: Use "Main Point" config. Supports LAN & WAN.
+- 👁️ **Supervisor Monitoring**: Live health/latency tracking.
+- 💰 **Automated Economics**: Fastest/Cheapest routing.
+- ☁️ **Cloud Ready**: Deploy on cloud VMs with `--public-host`.
 
 ## 📦 Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/loayabdalslam/connectit.chatit.git
 cd connectit
-
-# Install with all dependencies
 pip install -e .[all]
 ```
 
 ## 🚀 Usage
 
-### 1. Start the Main Entry Point (Supervisor)
-
-This server acts as the central hub (bootstrap) for your network.
+### 1. Start Main Entry Point (Supervisor)
 
 ```bash
-# Start the supervisor. Note the P2P address (e.g., ws://192.168.1.15:4001)
-python -m connectit api --port 8000
+# Typically runs on a stable server (locally or cloud)
+python -m connectit api
 ```
+*It will print the config command for other nodes.*
 
-### 2. Configure Clients/Nodes (One-Time Setup)
+### 2. Configure Worker Nodes
 
-On any machine you want to join the network, tell it where the supervisor is. You only do this **once**.
-
+Run once on each machine:
 ```bash
-python -m connectit config bootstrap_url ws://192.168.1.15:4001
+python -m connectit config bootstrap_url ws://<SUPERVISOR_IP>:4003
 ```
 
-### 3. Deploy Providers (Zero Config)
+### 3. Deploy Providers
 
-Now, start as many providers as you want. You don't need to specify IPs or ports.
-
+**Standard Usage (LAN/Local):** (Auto-detects IP)
 ```bash
 python -m connectit deploy-hf --model distilgpt2
 ```
 
-The node will:
-1.  Read the config to find the Main Point.
-2.  Auto-assign a port.
-3.  Join the mesh and announce its service.
+**External / Cloud Usage (WAN):**
+If you are running on a cloud VM (AWS/GCP/Colab), you must specify your PUBLIC IP so others can reach you.
+```bash
+python -m connectit deploy-hf --model distilgpt2 --public-host 203.0.113.5
+```
 
 ### 4. Run Requests (Client)
 
-Similarly, clients just run.
-
 ```bash
-python -m connectit p2p-request "Hello AI" --model distilgpt2
+python -m connectit p2p-request "Hello AI"
 ```
 
 ## 🏗 Architecture
 
--   **Main Point**: The configured `bootstrap_url` is the heartbeat of the network. It gossips peer lists to everyone.
--   **Config Persistence**: Stored in `~/.connectit/config.json`.
--   **Dynamic Mesh**: Nodes can come and go; the mesh heals automatically.
+-   **Main Point**: Central bootstrap & monitoring.
+-   **Split Addressing**: Nodes bind to `0.0.0.0` but announce their `public-host` or LAN IP.
+-   **Health Checks**: Active pinging ensures bad nodes (e.g. bad firewall) are marked unreachable.
 
 ## 🤝 Contributing
 
-We welcome contributions! Please check the [issues](https://github.com/connectit/connectit/issues) page.
+Contributions welcome! See [issues](https://github.com/connectit/connectit/issues).
 
 ## License
 
-Custom License (Non-Commercial). See [LICENSE](LICENSE) for details.
+Custom License (Non-Commercial). See [LICENSE](LICENSE).
