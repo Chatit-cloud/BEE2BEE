@@ -135,22 +135,19 @@ def p2p_request(prompt, model, bootstrap_link, max_new_tokens):
 @click.option('--host', default='127.0.0.1', help='API Host')
 @click.option('--port', default=4002, help='API Port')
 @click.option('--p2p-port', default=4003, help='P2P Port')
-@click.option('--bootstrap', default=None, help='Bootstrap URL (default: config)')
+@click.option('--bootstrap', default=None, help='Bootstrap URL (Optional)')
 def api(host, port, p2p_port, bootstrap):
     """Start the ConnectIT API server (Main Point)."""
     os.environ["CONNECTIT_PORT"] = str(p2p_port)
     
-    # Logic to decide if we should bootstrap
-    target_bootstrap = bootstrap or get_bootstrap_url()
-    
-    # Simple check: if the target_bootstrap matches ONLY the p2p port we are starting,
-    # and we are on localhost, we probably shouldn't connect to ourselves.
-    # This is a heuristic.
-    if str(p2p_port) in target_bootstrap and ("127.0.0.1" in target_bootstrap or "localhost" in target_bootstrap):
-        # We are likely the main point
-        console.print("[yellow]ℹ️  Skipping bootstrap (Self-referential)[/yellow]")
+    # The API Server (Main Point) determines the network. 
+    # It should NOT auto-connect to the client-side config (which points to the Main Point).
+    # Only connect to a bootstrap if explicitly told to (e.g., joining a mesh).
+    if bootstrap:
+         os.environ["CONNECTIT_BOOTSTRAP"] = bootstrap
     else:
-        os.environ["CONNECTIT_BOOTSTRAP"] = target_bootstrap
+         # Ensure we don't pick up stray env vars or config
+         os.environ["CONNECTIT_BOOTSTRAP"] = ""
         
     import uvicorn
     console.print(f"[bold green]🚀 Starting Main Point API on http://{host}:{port}[/bold green]")
