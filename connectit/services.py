@@ -95,7 +95,8 @@ class OllamaService(BaseService):
         # Check connection
         import requests
         try:
-            res = requests.get(f"{self.host}/api/tags")
+            # Add timeout to prevent hanging
+            res = requests.get(f"{self.host}/api/tags", timeout=5)
             if res.status_code != 200:
                 raise ServiceError(f"Ollama reachable but returned {res.status_code}")
             
@@ -104,7 +105,8 @@ class OllamaService(BaseService):
             # Simple substring check because ollama models have tags like 'llama3:latest'
             if not any(self.model_name in m for m in models):
                  # Try pull? For now just warn or error.
-                 console.log(f"[yellow]⚠️ Model '{self.model_name}' not found in Ollama. Attempting to use anyway (auto-pull might happen).[/yellow]")
+                 console.log(f"[yellow]⚠️ Model '{self.model_name}' not found in Ollama '{self.host}'.[/yellow]")
+                 console.log(f"[dim]Available: {models}[/dim]")
             else:
                  console.log(f"[green]✓ Ollama Model '{self.model_name}' ready[/green]")
                  
@@ -132,10 +134,10 @@ class OllamaService(BaseService):
                 "prompt": prompt,
                 "stream": False
             }
-            res = requests.post(f"{self.host}/api/generate", json=payload)
+            res = requests.post(f"{self.host}/api/generate", json=payload, timeout=300) # Long timeout for gen
             if res.status_code != 200:
                 raise ServiceError(f"Ollama Error: {res.text}")
-                
+            
             data = res.json()
             text = data.get("response", "")
             

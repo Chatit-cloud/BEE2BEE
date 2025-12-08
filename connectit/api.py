@@ -114,6 +114,10 @@ def get_peers():
     # print(f"API Peers state: {node.peers}") 
     for pid, info in node.peers.items():
         print(f"Peer {pid} metrics: {info.get('metrics')}")
+        # Debug providers for this peer
+        prov = node.providers.get(pid)
+        print(f"Peer {pid} services: {prov.keys() if prov else 'None'}")
+        
         res.append({
             "peer_id": pid,
             "addr": info.get("addr", ""),

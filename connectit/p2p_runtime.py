@@ -423,10 +423,13 @@ class P2PNode:
 
     def list_providers(self) -> List[Dict[str, Any]]:
         out = []
+        # console.log(f"DEBUG: Current providers state: {self.providers}")
         for pid, svcs in self.providers.items():
             all_models = []
             min_price = float('inf')
             found_ai_service = False
+            
+            # console.log(f"DEBUG: Checking provider {pid} services: {svcs.keys()}")
 
             for svc_name, meta in svcs.items():
                 if svc_name.startswith("_"): continue 
