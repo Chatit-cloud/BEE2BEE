@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, MessageSquare, Server, Settings, Shield, RefreshCw, Send, Plus, Network, X, Link, Globe, Minus, Square, Maximize2 } from 'lucide-react';
+import { Activity, MessageSquare, Server, Settings, Shield, RefreshCw, Send, Plus, Network, X, Link, Globe, Minus, Square, Maximize2, Wifi } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
@@ -29,6 +29,11 @@ interface Peer {
   latency_ms: number;
   health_status: string;
   last_audit: number;
+  metrics?: {
+    cpu_percent: number;
+    ram_percent: number;
+    gpu_percent?: number;
+  };
 }
 
 interface ChatMessage {
@@ -56,7 +61,7 @@ function App() {
       {/* Background Effects */}
       <div className="absolute inset-0 bg-grid opacity-[0.2] pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-primary/20 blur-[100px] rounded-full pointer-events-none" />
-      
+
       {/* Custom Title Bar */}
       <div className="h-8 bg-card/30 border-b border-border/50 flex items-center justify-between px-4 select-none backdrop-blur-xl z-30" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
@@ -92,37 +97,37 @@ function App() {
       <div className="flex flex-1 relative z-10 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-64 border-r border-border bg-card/50 flex flex-col backdrop-blur-xl z-20">
-        <div className="p-6 border-b border-border flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/25">
-            <Network className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">ConnectIT</span>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          <Button variant={activeView === 'admin' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('admin')} >
-            <Shield className="w-4 h-4" /> Network Admin
-          </Button>
-          <Button variant={activeView === 'chat' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('chat')} >
-            <MessageSquare className="w-4 h-4" /> AI Chat
-          </Button>
-        </nav>
-
-        <div className="p-4 border-t border-border bg-black/40">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2 text-sm text-green-400">
-              <Globe className="w-3 h-3" />
-              <span className="font-medium">Online</span>
+          <div className="p-6 border-b border-border flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/25">
+              <Network className="w-5 h-5 text-white" />
             </div>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowConfig(true)}>
-              <Settings className="w-3 h-3" />
+            <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">ConnectIT</span>
+          </div>
+
+          <nav className="flex-1 p-4 space-y-2">
+            <Button variant={activeView === 'admin' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('admin')} >
+              <Shield className="w-4 h-4" /> Network Admin
             </Button>
+            <Button variant={activeView === 'chat' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('chat')} >
+              <MessageSquare className="w-4 h-4" /> AI Chat
+            </Button>
+          </nav>
+
+          <div className="p-4 border-t border-border bg-black/40">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm text-green-400">
+                <Globe className="w-3 h-3" />
+                <span className="font-medium">Online</span>
+              </div>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowConfig(true)}>
+                <Settings className="w-3 h-3" />
+              </Button>
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono truncate" title={apiUrl}>
+              API: {apiUrl.replace(/http:\/\/|https:\/\//, "")}
+            </div>
           </div>
-          <div className="text-[10px] text-muted-foreground font-mono truncate" title={apiUrl}>
-            API: {apiUrl.replace(/http:\/\/|https:\/\//, "")}
-          </div>
-        </div>
-      </aside>
+        </aside>
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -268,76 +273,153 @@ const AdminView = ({ onConfigure, apiUrl }: { onConfigure: () => void, apiUrl: s
       className="flex flex-col h-full overflow-hidden"
     >
       <div className="p-8 space-y-8 flex-1 overflow-y-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Network Overview</h2>
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
-            <div className={cn("w-2 h-2 rounded-full", error ? "bg-red-500" : "bg-green-500")} />
-            Connected to {apiUrl}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Network Overview</h2>
+            <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
+              <div className={cn("w-2 h-2 rounded-full", error ? "bg-red-500" : "bg-green-500")} />
+              Connected to {apiUrl}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onConfigure}>
+              <Plus className="w-4 h-4 mr-2" /> System Config
+            </Button>
+            <Button variant="outline" size="icon" onClick={fetchPeers} disabled={loading}>
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onConfigure}>
-            <Plus className="w-4 h-4 mr-2" /> System Config
-          </Button>
-          <Button variant="outline" size="icon" onClick={fetchPeers} disabled={loading}>
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          </Button>
+
+        <div className="grid grid-cols-3 gap-4">
+          <StatsCard title="Active Peers" value={peers.length} icon={<Server className="w-4 h-4 text-blue-400" />} />
+          <StatsCard title="Avg Latency" value={`${Math.round(peers.reduce((acc, p) => acc + (p.latency_ms || 0), 0) / (peers.length || 1))}ms`} icon={<Activity className="w-4 h-4 text-green-400" />} />
+          <StatsCard title="Network Status" value={!error && peers.length > 0 ? "Healthy" : "Isolated"} icon={<Shield className={cn("w-4 h-4", !error && peers.length > 0 ? "text-primary" : "text-red-400")} />} />
         </div>
-      </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <StatsCard title="Active Peers" value={peers.length} icon={<Server className="w-4 h-4 text-blue-400" />} />
-        <StatsCard title="Avg Latency" value={`${Math.round(peers.reduce((acc, p) => acc + (p.latency_ms || 0), 0) / (peers.length || 1))}ms`} icon={<Activity className="w-4 h-4 text-green-400" />} />
-        <StatsCard title="Network Status" value={!error && peers.length > 0 ? "Healthy" : "Isolated"} icon={<Shield className={cn("w-4 h-4", !error && peers.length > 0 ? "text-primary" : "text-red-400")} />} />
-      </div>
+        <Card className="flex-1 border-border bg-card/50 backdrop-blur-sm shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-medium flex items-center gap-2">
+              <Network className="w-4 h-4" /> Connected Peers
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {error ? (
+              <div className="text-center py-12 space-y-2">
+                <div className="text-red-400 font-bold">Connection Failed</div>
+                <p className="text-sm text-muted-foreground">Could not connect to API at {apiUrl}</p>
+                <Button variant="outline" size="sm" onClick={onConfigure}>Change API URL</Button>
+              </div>
+            ) : peers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center">
+                  <Server className="w-8 h-8 text-muted-foreground/50" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">No Peers Connected</h3>
+                  <p className="text-muted-foreground text-sm max-w-[250px] mx-auto">Your node is running in isolation. Connect to an entry point to join the mesh.</p>
+                </div>
+                <Button onClick={onConfigure}>Connect to Entry Point</Button>
+              </div>
+            ) : (
+              peers.map(peer => (
+                <div key={peer.peer_id} className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-all group">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-medium text-sm text-foreground">{peer.peer_id.slice(0, 12)}...</span>
+                      <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase border-0", peer.health_status === 'online' ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>{peer.health_status}</Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">{peer.addr}</span>
+                  </div>
+                  <div className="flex items-center gap-4 relative group/metrics">
+                    {/* Hover Card for Metrics */}
+                    <div className="absolute bottom-full right-0 mb-2 w-48 p-3 rounded-lg bg-popover/90 backdrop-blur-md border border-border shadow-xl opacity-0 translate-y-2 group-hover/metrics:opacity-100 group-hover/metrics:translate-y-0 transition-all pointer-events-none z-50">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-white/10 pb-1 mb-1">
+                          <span>System Health</span>
+                          {peer.metrics ? <span className="text-green-400">Live</span> : <span className="text-amber-400">Waiting...</span>}
+                        </div>
 
-      <Card className="flex-1 border-border bg-card/50 backdrop-blur-sm shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-lg font-medium flex items-center gap-2">
-            <Network className="w-4 h-4" /> Connected Peers
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {error ? (
-            <div className="text-center py-12 space-y-2">
-              <div className="text-red-400 font-bold">Connection Failed</div>
-              <p className="text-sm text-muted-foreground">Could not connect to API at {apiUrl}</p>
-              <Button variant="outline" size="sm" onClick={onConfigure}>Change API URL</Button>
-            </div>
-          ) : peers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center">
-                <Server className="w-8 h-8 text-muted-foreground/50" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">No Peers Connected</h3>
-                <p className="text-muted-foreground text-sm max-w-[250px] mx-auto">Your node is running in isolation. Connect to an entry point to join the mesh.</p>
-              </div>
-              <Button onClick={onConfigure}>Connect to Entry Point</Button>
-            </div>
-          ) : (
-            peers.map(peer => (
-              <div key={peer.peer_id} className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-all group">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium text-sm text-foreground">{peer.peer_id.slice(0, 12)}...</span>
-                    <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase border-0", peer.health_status === 'online' ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>{peer.health_status}</Badge>
+                        {peer.metrics ? (
+                          <>
+                            {/* CPU Detail */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
+                                <span>CPU</span>
+                                <span>{peer.metrics.cpu_percent.toFixed(1)}%</span>
+                              </div>
+                              <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={cn("h-full rounded-full transition-all", peer.metrics.cpu_percent > 80 ? "bg-red-500" : "bg-blue-500")}
+                                  style={{ width: `${Math.min(peer.metrics.cpu_percent, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* RAM Detail */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
+                                <span>RAM</span>
+                                <span>{peer.metrics.ram_percent.toFixed(1)}%</span>
+                              </div>
+                              <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={cn("h-full rounded-full transition-all", peer.metrics.ram_percent > 80 ? "bg-red-500" : "bg-purple-500")}
+                                  style={{ width: `${Math.min(peer.metrics.ram_percent, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* GPU Detail (Optional) */}
+                            {peer.metrics.gpu_percent !== undefined && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
+                                  <span>GPU</span>
+                                  <span>{peer.metrics.gpu_percent.toFixed(1)}%</span>
+                                </div>
+                                <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                                  <div
+                                    className={cn("h-full rounded-full transition-all", peer.metrics.gpu_percent > 80 ? "bg-red-500" : "bg-orange-500")}
+                                    style={{ width: `${Math.min(peer.metrics.gpu_percent, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-center py-2 text-xs text-muted-foreground italic">
+                            Collecting metrics...
+                          </div>
+                        )}
+
+                        {/* Latency Detail */}
+                        <div className="pt-1 mt-1 border-t border-white/10 flex justify-between text-xs">
+                          <span className="text-muted-foreground">Latency</span>
+                          <span className="font-mono">{peer.latency_ms ? peer.latency_ms.toFixed(0) : '-'}ms</span>
+                        </div>
+                      </div>
+
+                      {/* Arrow */}
+                      <div className="absolute -bottom-1 right-6 w-2 h-2 bg-popover rotate-45 border-r border-b border-border"></div>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground hidden group-hover:block">last seen: {Math.round((Date.now() - (peer.last_audit || Date.now())) / 1000)}s ago</div>
+
+                    {/* Trigger Icon */}
+                    <div className="flex items-center gap-2 cursor-help">
+                      <Wifi className={cn("w-4 h-4 transition-colors",
+                        !peer.latency_ms ? "text-muted-foreground/30" :
+                          peer.latency_ms < 100 ? "text-green-500" :
+                            peer.latency_ms < 300 ? "text-yellow-500" : "text-red-500"
+                      )} />
+                      <span className="font-mono text-sm">{peer.latency_ms ? peer.latency_ms.toFixed(0) : '-'}ms</span>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground font-mono">{peer.addr}</span>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-xs text-muted-foreground hidden group-hover:block">last seen: {Math.round((Date.now() - peer.last_audit) / 1000)}s ago</div>
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-3 h-3 text-muted-foreground" />
-                    <span className="font-mono text-sm">{peer.latency_ms ? peer.latency_ms.toFixed(0) : '-'}ms</span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </motion.div>
   );

@@ -111,13 +111,16 @@ def get_peers():
     if not node:
         return []
     res = []
+    # print(f"API Peers state: {node.peers}") 
     for pid, info in node.peers.items():
+        print(f"Peer {pid} metrics: {info.get('metrics')}")
         res.append({
             "peer_id": pid,
             "addr": info.get("addr", ""),
             "latency_ms": info.get("last_pong_ms"),
             "health_status": info.get("health_status", "unknown"),
-            "last_audit": info.get("last_audit", 0)
+            "last_audit": info.get("last_audit", 0),
+            "metrics": info.get("metrics")
         })
     return res
 

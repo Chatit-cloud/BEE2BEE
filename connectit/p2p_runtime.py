@@ -64,9 +64,12 @@ class P2PNode:
             await asyncio.sleep(interval)
 
     async def _run_health_checks(self):
-        from .utils import now_ms
+        from .utils import now_ms, get_system_metrics
         timestamp = now_ms()
         peers_to_check = list(self.peers.items())
+        
+        # Collect local metrics once to send to everyone
+        local_metrics = get_system_metrics()
         
         # Only log if we have peers to avoid spam
         if len(peers_to_check) > 0:
@@ -83,7 +86,13 @@ class P2PNode:
             # 1. Latency Check (Ping)
             t0 = time.time()
             try:
-                await self._send(ws, {"type": "ping", "timestamp": t0})
+                console.log(f" Sending ping to {pid} with metrics: {local_metrics}")
+                # Send ping with metrics
+                await self._send(ws, {
+                    "type": "ping", 
+                    "timestamp": t0,
+                    "metrics": local_metrics
+                })
                 
                 # Update peer metadata
                 self.peers[pid]["last_audit"] = timestamp
@@ -94,7 +103,8 @@ class P2PNode:
                     self.providers[pid]["last_audit"] = timestamp
                     self.providers[pid]["health"] = "good" 
                     
-            except Exception:
+            except Exception as e:
+                console.log(f"[red]Ping failed to {pid}: {e}[/red]")
                 self.peers[pid]["health_status"] = "unreachable"
                 if pid in self.providers:
                     self.providers[pid]["health"] = "degraded"
@@ -139,6 +149,10 @@ class P2PNode:
         # Use explicit announce_port if provided, otherwise use the bound port
         display_port = self.announce_port if self.announce_port else self.port
         self.addr = f"ws://{display_host}:{display_port}"
+        # Start monitoring loop
+        self._monitor_active = True
+        asyncio.create_task(self._monitoring_loop(15))
+        
         console.log(f"[bold green]P2P Node Started[/bold green] at {self.addr}")
 
     async def stop(self):
@@ -300,7 +314,9 @@ class P2PNode:
             if old_pid and old_pid != pid:
                 self.peers.pop(old_pid)
                 
-            self.peers[pid] = {"ws": ws, "addr": addr, "last_pong_ms": 0}
+            # Preserve existing metrics if present
+            existing_metrics = self.peers.get(pid, {}).get("metrics")
+            self.peers[pid] = {"ws": ws, "addr": addr, "last_pong_ms": 0, "metrics": existing_metrics}
             
             # Update providers
             svcs = data.get("services", {})
@@ -326,6 +342,22 @@ class P2PNode:
                 asyncio.create_task(self._connect_peer(addr))
 
     async def _handle_ping(self, ws, data):
+        # Store received metrics if present
+        metrics = data.get("metrics")
+        if metrics:
+            console.log(f"Received metrics from peer: {metrics}")
+        # if metrics:
+            async with self._lock:
+                found_peer = False
+                for p, info in self.peers.items():
+                    if info["ws"] is ws:
+                        self.peers[p]["metrics"] = metrics
+                        console.log(f" [green]Updated metrics for {p}[/green]")
+                        found_peer = True
+                        break
+                if not found_peer:
+                   console.log(f" [red]Could not find peer for WS {id(ws)} in {len(self.peers)} peers[/red]")
+        
         await self._send(ws, {"type": "pong", "ts": data.get("ts")})
 
     async def _handle_pong(self, ws, data):

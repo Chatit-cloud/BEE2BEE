@@ -90,7 +90,43 @@ def get_public_ip() -> str | None:
         return None
 
 
+
 def is_colab() -> bool:
     """Check if running in Google Colab."""
     import sys
     return 'google.colab' in sys.modules
+
+
+
+
+def get_gpu_usage() -> float:
+    """Get GPU usage precent via nvidia-smi if available."""
+    import subprocess
+    import shutil
+    
+    if not shutil.which("nvidia-smi"):
+        return 0.0
+        
+    try:
+        # Get utilization.gpu (percent)
+        result = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"], 
+            stderr=subprocess.STDOUT
+        )
+        return float(result.decode("utf-8").strip())
+    except Exception:
+        return 0.0
+
+def get_system_metrics() -> Dict[str, float]:
+    """Capture real-time system metrics (CPU, RAM, GPU)."""
+    try:
+        import psutil
+        gpu_percent = get_gpu_usage()
+        
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=None),
+            "ram_percent": psutil.virtual_memory().percent,
+            "gpu_percent": gpu_percent
+        }
+    except Exception:
+        return {"cpu_percent": 0.0, "ram_percent": 0.0, "gpu_percent": 0.0}
