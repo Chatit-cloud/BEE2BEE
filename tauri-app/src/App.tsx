@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, MessageSquare, Server, Settings, Shield, RefreshCw, Send, Plus, Network, X, Link, Globe, Minus, Square, Maximize2, Wifi } from 'lucide-react';
+import { Activity, MessageSquare, Server, Settings, Shield, RefreshCw, Send, Plus, Network, X, Link, Globe, Minus, Square, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

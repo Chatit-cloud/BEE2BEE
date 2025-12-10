@@ -1,17 +1,18 @@
 name: "publish"
 
+# Workflow disabled - remove this comment to re-enable
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "tauri-app/**"
-      - ".github/workflows/actions.yaml"
-    tags:
-      - "v*.*.*" # Triggers on version tags like v1.0.0
-  release:
-    types: [published]
+  workflow_dispatch: # Only manual triggers allowed
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - "tauri-app/**"
+  #     - ".github/workflows/actions.yaml"
+  #   tags:
+  #     - "v*.*.*" # Triggers on version tags like v1.0.0
+  # release:
+  #   types: [published]
 
 jobs:
   publish-tauri:
