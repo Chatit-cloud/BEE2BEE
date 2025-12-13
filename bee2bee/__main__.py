@@ -6,6 +6,7 @@ from rich.console import Console
 from .hf import has_transformers, has_datasets, load_model_and_tokenizer, export_torchscript, export_onnx
 from .p2p import generate_join_link, parse_join_link
 from .p2p_runtime import run_p2p_node, P2PNode
+from .nat import auto_port_forward, get_public_ip
 
 console = Console()
 
@@ -182,6 +183,135 @@ def api(host, port, p2p_port, bootstrap):
     import uvicorn
     console.print(f"[bold green]🚀 Starting Main Point API on http://{host}:{port}[/bold green]")
     uvicorn.run("bee2bee.api:app", host=host, port=port, reload=False)
+
+@cli.command()
+@click.option('--port', default=4003, help='Port to forward')
+@click.option('--test/--no-test', default=True, help='Test connection after forwarding')
+def auto_forward(port, test):
+    """Automatically forward a port with UPnP and fallbacks"""
+    async def _run():
+        console.print(f"[dim]Starting auto port forwarding for port {port}...[/dim]")
+        
+        # Try auto forwarding
+        result = await auto_port_forward(port, "TCP")
+        
+        if result.success:
+            if result.method == "UPnP":
+                console.print(f"[green]✅ UPnP Port Forwarding SUCCESS![/green]")
+            else:
+                console.print(f"[green]✅ {result.method} SUCCESS! (Fallback)[/green]")
+            
+            console.print(f"   External: {result.external_ip}:{result.external_port}")
+            console.print(f"   Method: {result.method}")
+            console.print(f"   Details: {result.details}")
+            
+            if result.fallback_used:
+                console.print(f"[yellow]⚠️ Using fallback method - manual forwarding may still be needed[/yellow]")
+            
+            # Update config if this is the default P2P port
+            if port == 4003:
+                from .config import set_bootstrap_url
+                set_bootstrap_url(f"ws://{result.external_ip}:{result.external_port}")
+                console.print(f"[green]✓ Updated bootstrap_url in config[/green]")
+            
+            if test:
+                console.print(f"\n[cyan]Testing connection...[/cyan]")
+                success = await test_connection(f"{result.external_ip}:{result.external_port}")
+                if success:
+                    console.print("[green]✅ Connection test successful![/green]")
+                else:
+                    console.print("[yellow]⚠️ Connection test failed (firewall may be blocking)[/yellow]")
+        
+        else:
+            console.print(f"[red]❌ All auto methods failed[/red]")
+            
+            if result.external_ip:
+                console.print(f"[yellow]Your public IP is: {result.external_ip}[/yellow]")
+                console.print(f"[yellow]Manual port forwarding required:[/yellow]")
+                console.print(f"   1. Go to router admin (192.168.1.1)")
+                console.print(f"   2. Forward TCP port {port}")
+                console.print(f"   3. Use: ws://{result.external_ip}:{port}")
+    
+    asyncio.run(_run())
+
+
+@cli.command()
+@click.option('--port', default=4003, help='Port to check')
+def port_status(port):
+    """Check port forwarding status"""
+    async def _run():
+        from .utils import get_lan_ip
+        
+        console.print(f"[dim]Checking port {port} status...[/dim]")
+        
+        # Get network info
+        lan_ip = get_lan_ip()
+        
+        console.print(f"\n[cyan]Network Information:[/cyan]")
+        console.print(f"  Local IP:     {lan_ip}")
+        console.print(f"  Port:         {port}")
+        
+        # Try auto forwarding
+        result = await auto_port_forward(port, "TCP")
+        
+        console.print(f"\n[cyan]Port Forwarding Status:[/cyan]")
+        if result.success:
+            if result.method == "UPnP":
+                status = "[green]✅ AUTO-FORWARDED (UPnP)[/green]"
+            else:
+                status = f"[yellow]⚠️ DETECTED ({result.method})[/yellow]"
+            
+            console.print(f"  Status:       {status}")
+            console.print(f"  External IP:  {result.external_ip}")
+            console.print(f"  External Port: {result.external_port}")
+            console.print(f"  Details:      {result.details}")
+            
+            if result.fallback_used:
+                console.print(f"  [dim](Using fallback method)[/dim]")
+        
+        else:
+            console.print(f"  Status:       [red]❌ NOT FORWARDED[/red]")
+            
+            if result.external_ip:
+                console.print(f"  Your Public IP: {result.external_ip}")
+                console.print(f"  [yellow]Manual forwarding required[/yellow]")
+        
+        # Check local port
+        console.print(f"\n[cyan]Local Port Check:[/cyan]")
+        if is_port_open_locally(port):
+            console.print(f"  [green]✓ Port {port} is open locally[/green]")
+        else:
+            console.print(f"  [red]✗ Port {port} is not open locally[/red]")
+    
+    asyncio.run(_run())
+
+
+async def test_connection(addr: str) -> bool:
+    """Test if address is accessible"""
+    import websockets
+    try:
+        # Add ws:// if not present
+        if not addr.startswith("ws://"):
+            addr = f"ws://{addr}"
+        
+        async with websockets.connect(addr, timeout=5) as ws:
+            await ws.close()
+            return True
+    except Exception:
+        return False
+
+
+def is_port_open_locally(port: int) -> bool:
+    """Check if port is open locally"""
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        return result == 0
+    except:
+        return False
 
 
 
