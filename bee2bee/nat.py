@@ -74,7 +74,7 @@ class PortForwarder:
                 progress.update(task, description=f"Trying {method_name}...")
                 
                 try:
-                    # 修复：同步方法需要同步调用，异步方法需要异步调用
+                    
                     if method_name == "STUN Detection":
                         result = await method_func(port, protocol, description)
                     else:
@@ -322,12 +322,8 @@ class PortForwarder:
     async def _try_stun_detection(self, port: int, protocol: str, description: str) -> PortForwardingResult:
         """Use STUN to detect public IP and check if port appears open"""
         try:
-            console.print(f"[dim]  Detecting public IP via STUN...[/dim]")
-            
-            # 修复：移除相对导入，提供替代方案
-            # from .stun_client import STUNClient  # 原代码
-            
-            # 临时替代方案：直接实现简单STUN客户端
+            console.print(f"[dim]  Detecting public IP via STUN...[/dim]")           
+            # from .stun_client import STUNClient
             stun_servers = [
                 ("stun.l.google.com", 19302),
                 ("stun1.l.google.com", 19302),
