@@ -47,7 +47,7 @@ A modern UI to visualize the network and chat with models.
 
 **Run Locally:**
 ```bash
-cd desktop-app
+cd electron-app
 npm install      # First time only
 npm run dev
 ```
@@ -55,6 +55,7 @@ npm run dev
 - Open the App.
 - It connects to `http://localhost:4002` by default.
 - Go to "Chat" to talk to available providers.
+- See [MANUAL_TESTING.md](MANUAL_TESTING.md) for detailed testing steps.
 
 ---
 
