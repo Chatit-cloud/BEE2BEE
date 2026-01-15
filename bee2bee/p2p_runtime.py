@@ -531,14 +531,106 @@ class P2PNode:
             console.log(f"[yellow]Unknown request ID: {rid}[/yellow]")
 
     async def _handle_piece_request(self, ws, data):
-        # ... logic as before ...
-        console.log(f"[debug] Piece request received")
-        pass
+        """Handle a request for piece data by content hash and piece index."""
+        content_hash = data.get("content_hash")
+        piece_index = data.get("piece_index")
+        console.log(f"[debug] Piece request received: hash={content_hash}, idx={piece_index}")
+        
+        if not content_hash or piece_index is None:
+            await self._send(ws, {
+                "type": "piece_data",
+                "content_hash": content_hash,
+                "piece_index": piece_index,
+                "error": "missing_params"
+            })
+            return
+            
+        # Look up piece in local storage
+        piece_info = self.pieces.get(content_hash)
+        if not piece_info:
+            console.log(f"[yellow]Piece not found: {content_hash}[/yellow]")
+            await self._send(ws, {
+                "type": "piece_data",
+                "content_hash": content_hash,
+                "piece_index": piece_index,
+                "error": "not_found"
+            })
+            return
+            
+        pieces_list = piece_info.get("pieces", [])
+        if piece_index < 0 or piece_index >= len(pieces_list):
+            console.log(f"[yellow]Invalid piece index: {piece_index}[/yellow]")
+            await self._send(ws, {
+                "type": "piece_data",
+                "content_hash": content_hash,
+                "piece_index": piece_index,
+                "error": "invalid_index"
+            })
+            return
+            
+        # Send the piece data (base64 encoded for JSON transport)
+        piece_bytes = pieces_list[piece_index]
+        await self._send(ws, {
+            "type": "piece_data",
+            "content_hash": content_hash,
+            "piece_index": piece_index,
+            "data": base64.b64encode(piece_bytes).decode("utf-8"),
+            "hash": piece_info.get("hashes", [])[piece_index] if piece_index < len(piece_info.get("hashes", [])) else None
+        })
+        console.log(f"[green]✅ Sent piece {piece_index} for {content_hash[:16]}...[/green]")
 
     async def _handle_piece_data(self, ws, data):
-        # ... logic as before ...
-        console.log(f"[debug] Piece data received")
-        pass
+        """Handle received piece data - verify and store it."""
+        content_hash = data.get("content_hash")
+        piece_index = data.get("piece_index")
+        piece_data_b64 = data.get("data")
+        expected_hash = data.get("hash")
+        error = data.get("error")
+        
+        console.log(f"[debug] Piece data received: hash={content_hash}, idx={piece_index}")
+        
+        if error:
+            console.log(f"[red]Piece error from peer: {error}[/red]")
+            return
+            
+        if not content_hash or piece_index is None or not piece_data_b64:
+            console.log(f"[red]Invalid piece data message[/red]")
+            return
+            
+        # Decode the piece
+        try:
+            piece_bytes = base64.b64decode(piece_data_b64)
+        except Exception as e:
+            console.log(f"[red]Failed to decode piece data: {e}[/red]")
+            return
+            
+        # Verify hash if provided
+        if expected_hash:
+            from .p2p import sha256_hex_bytes
+            actual_hash = sha256_hex_bytes(piece_bytes)
+            if actual_hash != expected_hash:
+                console.log(f"[red]Piece hash mismatch! Expected {expected_hash[:16]}..., got {actual_hash[:16]}...[/red]")
+                return
+            console.log(f"[debug] Piece hash verified: {actual_hash[:16]}...")
+        
+        # Store the piece
+        async with self._lock:
+            if content_hash not in self.pieces:
+                self.pieces[content_hash] = {"pieces": [], "hashes": [], "complete": False}
+            
+            piece_info = self.pieces[content_hash]
+            
+            # Extend lists if needed
+            while len(piece_info["pieces"]) <= piece_index:
+                piece_info["pieces"].append(None)
+            while len(piece_info["hashes"]) <= piece_index:
+                piece_info["hashes"].append(None)
+            
+            piece_info["pieces"][piece_index] = piece_bytes
+            if expected_hash:
+                piece_info["hashes"][piece_index] = expected_hash
+                
+        console.log(f"[green]✅ Stored piece {piece_index} for {content_hash[:16]}...[/green]")
 
     # --- Public API ---
 
