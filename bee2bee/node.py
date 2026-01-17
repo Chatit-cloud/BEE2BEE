@@ -1,4 +1,18 @@
 from __future__ import annotations
+"""
+⚠️ DEPRECATED: This module uses a legacy coordinator-based architecture.
+
+For new deployments, use `p2p_runtime.py` which provides:
+- True P2P networking (any node can be server/client)
+- NAT traversal with STUN/UPnP
+- Piece-based data transfer
+- Service discovery without central coordinator
+
+This module is kept for backward compatibility with existing deployments
+that use a central coordinator pattern. It will be removed in a future version.
+
+Migration: Replace `node.run_node(url)` with `p2p_runtime.run_p2p_node(bootstrap_link=url)`
+"""
 import asyncio
 import json
 import platform
@@ -6,6 +20,14 @@ import psutil
 import websockets
 from typing import Dict, Any, Optional
 from rich.console import Console
+import warnings
+
+# Emit deprecation warning when module is imported
+warnings.warn(
+    "bee2bee.node is deprecated. Use bee2bee.p2p_runtime instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from .protocol import (
     msg,
