@@ -1,18 +1,35 @@
 {
   "version": 2,
-  "name": "bee2bee-fusion-hub",
+  "name": "bee2bee-platform",
   "framework": "vite",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    },
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "destination": "api/index.js"
     },
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/$1",
+      "check": true
+    },
+    {
+      "source": "/(.*)",
+      "destination": "index.html"
     }
   ],
   "env": {
-    "VITE_API_MODE": "production"
+    "VITE_SUPABASE_URL": "@supabase_url",
+    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key"
   }
 }
