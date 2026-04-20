@@ -6,76 +6,79 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Direct Generate with custom options (no max token limit)
-app.post('/api/generate', async (req, res) => {
-    const { prompt, model, max_tokens, temperature, svc } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+/**
+ * CoitHub Unified API (Serverless Entry for Vercel)
+ * Endpoints: REGISTER, GENERATE, STATUS
+ */
 
+// 1. REGISTER
+app.post('/api/p2p/register', async (req, res) => {
+    const { link } = req.body;
+    if (!link) return res.status(400).json({ error: 'Missing join link' });
+    
     try {
-        const options = {
-            max_tokens: max_tokens || 2048,
-            temperature: temperature || 0.7,
-            svc: svc
-        };
-        const result = await bridge.generate(prompt, model, options);
+        const result = await bridge.registerJoinLink(link);
+        const stats = bridge.getStats();
         res.json({
-            text: result.text,
-            rid: result.rid,
-            metadata: result.metadata || {
-                trust_score: 0.999,
-                engine: 'coithub-core'
-            }
+            ...result,
+            connected: stats.connected,
+            activeNode: stats.activeNode,
+            mode: 'fusion-serverless'
         });
     } catch (e) {
-        console.error('Generate Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// Consensus Execution
-app.post('/api/p2p/consensus', async (req, res) => {
-    const { task } = req.body;
-    if (!task || !task.prompt) return res.status(400).json({ error: 'Task prompt is required' });
+// 2. GENERATE - Unified endpoint used by onSend
+app.post('/api/p2p/generate', async (req, res) => {
+    const { task, prompt, model } = req.body;
+    
+    // Handle both {task: {prompt}} and {prompt} formats
+    const finalPrompt = task?.prompt || prompt;
+    const finalModel = task?.model || model || 'default';
+
+    if (!finalPrompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
-        const result = await bridge.request(task);
+        const result = await bridge.request({
+            prompt: finalPrompt,
+            model: finalModel,
+            max_tokens: req.body.max_tokens || 2048,
+            temperature: req.body.temperature || 0.7
+        });
+        
         res.json({
             text: result.text,
             rid: result.rid,
             metadata: {
-                trust_score: 0.999,
-                neural_path: 'direct-swarm-link',
-                engine: 'coithub-core',
-                mode: 'serverless'
+                ...result.metadata,
+                engine: 'coithub-fusion',
+                status: 'verified',
+                mode: 'fusion-serverless'
             }
         });
     } catch (e) {
         console.error('API Error:', e.message);
-        res.status(504).json({ error: e.message });
+        res.status(504).json({ error: `Neural Consensus Timeout: ${e.message}` });
     }
 });
 
-app.post('/api/p2p/register', async (req, res) => {
-    const { link } = req.body;
-    if (!link) return res.status(400).json({ error: 'Missing join link' });
-    const result = await bridge.registerJoinLink(link);
-    res.json(result);
-});
-
+// 3. STATUS - Consolidated telemetry
 app.get('/api/p2p/status', (req, res) => {
+    const stats = bridge.getStats();
+    const mesh = bridge.getRegionalMesh();
     res.json({
-        ...bridge.getStats(),
-        mode: 'serverless'
+        ...stats,
+        mesh,
+        mode: 'fusion-serverless',
+        status: stats.connected ? 'active' : 'idle'
     });
 });
 
-app.get('/api/p2p/mesh', (req, res) => {
-    res.json(bridge.getRegionalMesh());
+// Fallback
+app.use((req, res) => {
+    res.status(404).json({ error: `Route ${req.url} not found in CoitHub Mesh` });
 });
 
-app.post('/api/subscribe', (req, res) => {
-    res.json({ success: true, message: 'Subscribed to Neural Mesh.' });
-});
-
-// Export for Vercel
 export default app;

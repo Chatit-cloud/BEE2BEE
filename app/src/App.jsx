@@ -548,19 +548,24 @@ onSend={async (content) => {
           setIsProcessing(true);
           try {
             const payload = { task: { prompt: content, model: selectedModel } };
-            let response = await fetch('/api/p2p/generate', {
+        let response;
+        try {
+            response = await fetch('/api/p2p/generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
+        } catch (e) {
+            console.warn("[Mesh] Network error reaching cloud bridge:", e.message);
+            // Fallthrough to direct link logic
+        }
 
-            if (response.status === 504 || response.status === 503) {
-               console.warn("[Mesh] Cloud Bridge timeout. Attempting Neural Direct-Link...");
-               
-               let directSuccess = false;
-               
-               // Use dynamic API from peer metadata (includes public IP)
-               const peer = (networkStats.peers || [])[0];
+        if (!response || !response.ok) {
+            console.warn(`[Mesh] Cloud Bridge unreachable (Status: ${response?.status || 'network-error'}). Attempting Neural Direct-Link...`);
+            
+            let directSuccess = false;
+            // Use dynamic API from peer metadata (includes public IP)
+            const peer = (networkStats.peers || [])[0];
                const peerApiPort = peer?.api_port || 3333;
                const peerApiHost = peer?.api_host || peer?.public_ip;
                
