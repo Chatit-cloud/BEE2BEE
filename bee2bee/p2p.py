@@ -7,14 +7,8 @@ import hashlib
 
 def generate_join_link(network: str, model: str, hash_hex: str, bootstrap: List[str]) -> str:
     # bootstrap entries as multiaddrs or host:port strings
-    q = {
-        "network": network,
-        "model": model,
-        "hash": hash_hex,
-        "bootstrap": bootstrap,
-    }
-    # Use repeated keys for bootstrap
-    parts = [f"bootstrap={base64.urlsafe_b64encode(b.encode()).decode()}" for b in bootstrap]
+    # Use URL-safe base64 and remove padding to avoid URL issues
+    parts = [f"bootstrap={base64.urlsafe_b64encode(b.encode()).decode().rstrip('=')}" for b in bootstrap]
     qs = f"network={network}&model={model}&hash={hash_hex}"
     if parts:
         qs = qs + "&" + "&".join(parts)
@@ -29,7 +23,16 @@ def parse_join_link(link: str) -> Dict[str, Any]:
     network = qs.get("network", [None])[0]
     model = qs.get("model", [None])[0]
     h = qs.get("hash", [None])[0]
-    boots = [base64.urlsafe_b64decode(b).decode() for b in qs.get("bootstrap", [])]
+    # Handle base64 with stripped padding
+    def decode_b64(s):
+        if not s:
+            return s
+        # Add padding back if needed
+        missing_padding = len(s) % 4
+        if missing_padding:
+            s += '=' * (4 - missing_padding)
+        return base64.urlsafe_b64decode(s).decode()
+    boots = [decode_b64(b) for b in qs.get("bootstrap", [])]
     return {"network": network, "model": model, "hash": h, "bootstrap": boots}
 
 

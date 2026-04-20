@@ -173,7 +173,9 @@ export class DynamicBee2BeeBridge {
                     rid,
                     prompt: task.prompt,
                     model: task.model,
-                    svc: 'ollama' // Swarm will auto-resolve if svc differs
+                    max_tokens: task.max_tokens,
+                    temperature: task.temperature,
+                    svc: task.svc || 'ollama'
                 }));
             });
         }
@@ -208,6 +210,8 @@ export class DynamicBee2BeeBridge {
                 body: JSON.stringify({
                     prompt: task.prompt,
                     model: task.model,
+                    max_new_tokens: task.max_tokens || 2048,
+                    temperature: task.temperature || 0.7,
                     stream: false
                 })
             });
@@ -235,6 +239,17 @@ export class DynamicBee2BeeBridge {
         }
     }
 
+    async generate(prompt, model, options = {}) {
+        const task = {
+            prompt,
+            model,
+            max_tokens: options.max_tokens,
+            temperature: options.temperature,
+            svc: options.svc
+        };
+        return this.request(task);
+    }
+
     getStats() {
         return {
             ...this.stats,
@@ -248,13 +263,21 @@ export class DynamicBee2BeeBridge {
         try {
             const url = new URL(link);
             const bootstrapEnc = url.searchParams.get('bootstrap') || url.searchParams.get('peer');
-            if (!bootstrapEnc) throw new Error('Missing peer address');
-            let bootstrapUrl = Buffer.from(bootstrapEnc, 'base64').toString();
+            if (!bootstrapEnc) throw new Error('Missing peer address in link');
+            // Handle URL-safe base64 (with or without padding)
+            let padded = bootstrapEnc;
+            const missing = 4 - (bootstrapEnc.length % 4);
+            if (missing !== 4) {
+                padded = bootstrapEnc + '='.repeat(missing);
+            }
+            let bootstrapUrl = Buffer.from(padded, 'base64').toString();
             if (!bootstrapUrl.includes('://')) bootstrapUrl = `ws://${bootstrapUrl}`;
+            console.log(`[Bridge] Registering node: ${bootstrapUrl}`);
             this.nodes.add(bootstrapUrl);
             this.connect();
             return { success: true, node: bootstrapUrl };
         } catch (e) {
+            console.error('[Bridge] Register failed:', e);
             return { success: false, error: e.message };
         }
     }

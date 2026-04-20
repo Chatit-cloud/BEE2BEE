@@ -60,6 +60,7 @@ class HFService(BaseService):
         
         prompt = params.get("prompt")
         max_new = int(params.get("max_new_tokens", self.max_new_tokens))
+        temperature = float(params.get("temperature", 0.7))
         
         if not prompt:
             raise ServiceError("Missing prompt")
@@ -67,7 +68,7 @@ class HFService(BaseService):
         try:
             t0 = time.time()
             from .hf import generate_text
-            text = generate_text(self.model, self.tokenizer, self.device, prompt, max_new)
+            text = generate_text(self.model, self.tokenizer, self.device, prompt, max_new, temperature=temperature)
             
             # Token accounting
             in_tokens = len(self.tokenizer.encode(prompt))
@@ -125,6 +126,9 @@ class OllamaService(BaseService):
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         import requests
         prompt = params.get("prompt")
+        max_new = int(params.get("max_new_tokens", 2048))
+        temperature = float(params.get("temperature", 0.7))
+        
         if not prompt:
             raise ServiceError("Missing prompt")
             
@@ -134,7 +138,11 @@ class OllamaService(BaseService):
             payload = {
                 "model": self.model_name,
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "options": {
+                    "num_predict": max_new,
+                    "temperature": temperature
+                }
             }
             res = requests.post(f"{self.host}/api/generate", json=payload, timeout=300) # Long timeout for gen
             if res.status_code != 200:

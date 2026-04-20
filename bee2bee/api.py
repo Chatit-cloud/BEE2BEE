@@ -151,20 +151,37 @@ async def connect_peer(addr: str):
         return {"status": "error", "message": str(e)}
 
 class ChatRequest(BaseModel):
-    provider_id: str
+    provider_id: Optional[str] = 'local'
     prompt: str
     model: Optional[str] = None
-    max_new_tokens: Optional[int] = 64
+    max_new_tokens: Optional[int] = None
+    temperature: Optional[float] = 0.7
+    stream: Optional[bool] = False
 
 @app.post("/chat", dependencies=[Depends(get_api_key)])
 async def chat(req: ChatRequest):
     if not node:
         return {"error": "Node not running"}
     try:
-        # returns {"text": "...", "tokens": ...}
-        res = await node.request_generation(req.provider_id, req.prompt, req.max_new_tokens, req.model)
-        return {"status": "ok", "result": res}
+        pid = req.provider_id
+        if not pid or pid == 'local':
+            pid = node.peer_id
+        
+        max_tokens = req.max_new_tokens if req.max_new_tokens else 2048
+        
+        res = await node.request_generation(pid, req.prompt, max_tokens, req.model)
+        return {
+            "status": "ok", 
+            "text": res.get("text", ""), 
+            "rid": res.get("rid"),
+            "metadata": {
+                "engine": "bee2bee-local-ingress",
+                "node": node.addr,
+                "latency_ms": res.get("latency_ms")
+            }
+        }
     except Exception as e:
+        logger.error(f"Local API Error: {e}")
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":

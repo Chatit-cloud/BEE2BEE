@@ -32,11 +32,15 @@ def load_model_and_tokenizer(model_name: str, device: Optional[str] = None):
     return mdl, tok, device
 
 
-def generate_text(model, tokenizer, device: str, prompt: str, max_new_tokens: int = 32) -> str:
+def generate_text(model, tokenizer, device: str, prompt: str, max_new_tokens: int = 32, temperature: float = 0.7) -> str:
     import torch  # type: ignore
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    gen_kwargs = {"max_new_tokens": max_new_tokens}
+    if temperature > 0:
+        gen_kwargs["temperature"] = temperature
+        gen_kwargs["do_sample"] = True
     with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        out = model.generate(**inputs, **gen_kwargs)
     return tokenizer.decode(out[0], skip_special_tokens=True)
 
 

@@ -540,7 +540,16 @@ class P2PNode:
         rid = data.get("rid")
         svc_name = data.get("svc", "hf")
         model_name = data.get("model")
-        logger.info(f"Generation request {rid} for {model_name} (preferred svc: {svc_name})")
+        max_tokens = data.get("max_tokens", 2048)
+        temperature = data.get("temperature", 0.7)
+        logger.info(f"Generation request {rid} for {model_name} (preferred svc: {svc_name}, max_tokens: {max_tokens})")
+        
+        # Prepare params including optional generation settings
+        params = {
+            "prompt": data.get("prompt", ""),
+            "max_new_tokens": max_tokens,
+            "temperature": temperature
+        }
         
         # 1. Local Execution Primary
         svc = self.local_services.get(svc_name)
@@ -553,7 +562,7 @@ class P2PNode:
         if svc:
             try:
                 logger.debug(f"Executing locally via {svc_name}")
-                result = svc.execute(data)
+                result = svc.execute(params)
                 response = {"type": "gen_result", "rid": rid, **result}
                 await self._send(ws, response)
                 logger.success(f"Local execution target {rid} reached")
@@ -730,7 +739,7 @@ class P2PNode:
         await self._send(info["ws"], req)
         
         try:
-            result = await asyncio.wait_for(future, timeout=60.0)
+            result = await asyncio.wait_for(future, timeout=300.0)
             logger.success(f"Generation request {rid} completed")
             return result
         except asyncio.TimeoutError:
@@ -818,7 +827,9 @@ async def run_p2p_node(
             
             # --- One-Click Registration Link ---
             # Standard console link if terminal supports it
-            web_reg_url = f"https://coithub.org/register?link={join_link}&region={region}&tag={backend}"
+            from urllib.parse import quote
+            encoded_link = quote(join_link, safe='')
+            web_reg_url = f"https://coithub.org/register?link={encoded_link}&region={quote(region, safe='')}&tag={quote(backend, safe='')}"
             
             console.print(f"\n[bold green]✨ One-Click Registration Enabled[/bold green]")
             console.print(f"[blue]Register and Monitor live at:[/blue] [link={web_reg_url}]{web_reg_url}[/link]")

@@ -508,18 +508,43 @@ export default function App() {
           setMessages(prev => [...prev, { role: 'user', text: content }]);
           setIsProcessing(true);
           try {
-            const response = await fetch('/api/p2p/consensus', {
+            const payload = { task: { prompt: content, model: selectedModel } };
+            let response = await fetch('/api/p2p/consensus', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ task: { prompt: content, model: selectedModel } })
+              body: JSON.stringify(payload)
             });
-            const data = await response.json();
+
+            // If status is 504 and we are likely hitting a local node from a remote gateway
             if (response.status === 504) {
-               setMessages(prev => [...prev, { role: 'ai', text: `Consensus Timeout (120s). The node is likely loading ${selectedModel} or executing a heavy compute task.`, metadata: { error: true } }]);
+               console.warn("[Mesh] Cloud Bridge timeout. Attempting Neural Direct-Link...");
+               // Attempt local ingress fallback
+               try {
+                   const localResp = await fetch('http://localhost:8000/chat', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ prompt: content, model: selectedModel })
+                   });
+                   if (localResp.ok) {
+                       const localData = await localResp.json();
+                       setMessages(prev => [...prev, { 
+                           role: 'ai', 
+                           text: localData.text || "Direct Link Success.", 
+                           metadata: { ...localData.metadata, mode: 'direct-ingress' } 
+                       }]);
+                       return;
+                   }
+               } catch (localErr) {
+                   console.error("[Mesh] Direct-Link failed:", localErr);
+               }
+               
+               setMessages(prev => [...prev, { role: 'ai', text: `Consensus Timeout (300s). The node at your address is unreachable or loading ${selectedModel}.`, metadata: { error: true } }]);
             } else {
+               const data = await response.json();
                setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (No Response).", metadata: data.metadata }]);
             }
-          } catch { 
+          } catch (err) { 
+            console.error("[Mesh] Request failed:", err);
             setMessages(prev => [...prev, { role: 'ai', text: "Bridge Offline.", metadata: { trust_score: 0 } }]); 
           } finally { setIsProcessing(false); }
       }}

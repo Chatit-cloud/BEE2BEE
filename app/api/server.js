@@ -22,6 +22,32 @@ bridge.connect();
  * Bee2Bee API Gateway
  */
 
+// Direct Generate with custom options (no max token limit)
+app.post('/api/generate', async (req, res) => {
+    const { prompt, model, max_tokens, temperature, svc } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    try {
+        const options = {
+            max_tokens: max_tokens || 2048,
+            temperature: temperature || 0.7,
+            svc: svc
+        };
+        const result = await bridge.generate(prompt, model, options);
+        res.json({
+            text: result.text,
+            rid: result.rid,
+            metadata: result.metadata || {
+                trust_score: 0.999,
+                engine: 'bee2bee-core'
+            }
+        });
+    } catch (e) {
+        console.error('Generate Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Consensus Execution
 app.post('/api/p2p/consensus', async (req, res) => {
     const { task } = req.body;
