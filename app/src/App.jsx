@@ -494,23 +494,22 @@ export default function App() {
   }, []);
 
   const fetchStats = async () => {
-      try {
-        const [statsRes, meshRes] = await Promise.all([
-          fetch('/api/p2p/status'),
-          fetch('/api/p2p/mesh')
-        ]);
-        if (statsRes.ok) setNetworkStats(await statsRes.json());
-        if (meshRes.ok) {
-           const mesh = await meshRes.json();
-           setMeshData(mesh);
-           // Auto-pick first available model if default not found
-           const allModels = Object.values(mesh).flat().flatMap(n => n.models);
-           if (allModels.length > 0 && !allModels.includes(selectedModel)) {
-              setSelectedModel(allModels[0]);
-           }
+    try {
+      const statsRes = await fetch('/api/p2p/status');
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setNetworkStats(data);
+        if (data.mesh) {
+          setMeshData(data.mesh);
+          // Auto-pick first available model if default not found
+          const allModels = Object.values(data.mesh).flat().flatMap(n => n.models);
+          if (allModels.length > 0 && !allModels.includes(selectedModel)) {
+             setSelectedModel(allModels[0]);
+          }
         }
-      } catch { setNetworkStats(prev => ({ ...prev, connected: false })); }
-    };
+      }
+    } catch { setNetworkStats(prev => ({ ...prev, connected: false })); }
+  };
 
   useEffect(() => {
     fetchStats();
@@ -549,7 +548,7 @@ onSend={async (content) => {
           setIsProcessing(true);
           try {
             const payload = { task: { prompt: content, model: selectedModel } };
-            let response = await fetch('/api/p2p/consensus', {
+            let response = await fetch('/api/p2p/generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)

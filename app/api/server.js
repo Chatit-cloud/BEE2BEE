@@ -9,128 +9,98 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Request logging for debugging 404/504
+// Request logging for debugging
 app.use((req, res, next) => {
-    console.log(`[GW] ${req.method} ${req.url}`);
+    console.log(`[Neural Gateway] ${req.method} ${req.url}`);
     next();
 });
 
-// Initialize P2P connection
+// Initialize P2P bridge connection
 bridge.connect();
 
 /**
- * CoitHub API Gateway
+ * CoitHub Unified API Refactor
+ * Endpoints: REGISTER, GENERATE, STATUS
  */
 
-// Direct Generate with custom options (no max token limit)
-app.post('/api/generate', async (req, res) => {
-    const { prompt, model, max_tokens, temperature, svc } = req.body;
+// 1. REGISTER - Onboard a node via join-link
+app.post('/api/p2p/register', async (req, res) => {
+    const { link } = req.body;
+    if (!link) return res.status(400).json({ error: 'Missing join link' });
+    
+    try {
+        const result = await bridge.registerJoinLink(link);
+        const stats = bridge.getStats();
+        
+        res.json({
+            ...result,
+            connected: stats.connected,
+            activeNode: stats.activeNode
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 2. GENERATE - Unified inference endpoint
+app.post('/api/p2p/generate', async (req, res) => {
+    const { prompt, model, max_tokens, temperature, stream } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const stats = bridge.getStats();
+    if (!stats.connected) {
+        return res.status(503).json({ error: 'No neural nodes available. Please register or start a node.' });
+    }
 
     try {
         const options = {
             max_tokens: max_tokens || 2048,
             temperature: temperature || 0.7,
-            svc: svc
+            stream: stream || false
         };
-        const result = await bridge.generate(prompt, model, options);
-        res.json({
-            text: result.text,
-            rid: result.rid,
-            metadata: result.metadata || {
-                trust_score: 0.999,
-                engine: 'coithub-core'
-            }
+
+        // Note: bridge.request handles p2p routing and model selection
+        const result = await bridge.request({
+            prompt,
+            model: model || 'default',
+            ...options
         });
-    } catch (e) {
-        console.error('Generate Error:', e.message);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Consensus Execution
-app.post('/api/p2p/consensus', async (req, res) => {
-    const { task } = req.body;
-    if (!task || !task.prompt) {
-        return res.status(400).json({ error: 'Task prompt is required' });
-    }
-
-    const stats = bridge.getStats();
-    if (!stats.connected) {
-        return res.status(503).json({ error: 'No nodes connected. Register a node first or ensure node is running.' });
-    }
-
-    try {
-        console.log(`[API] Consensus request for model: ${task.model || 'default'}`);
-        const result = await bridge.request(task);
-        
-        if (!result.text) {
-            return res.status(502).json({ error: 'Empty response from node' });
-        }
         
         res.json({
             text: result.text,
             rid: result.rid,
             metadata: {
-                trust_score: 0.999,
-                neural_path: 'direct-swarm-link',
-                engine: 'coithub-core',
-                node: stats.activeNode
+                ...result.metadata,
+                engine: 'coithub-fusion',
+                status: 'verified'
             }
         });
     } catch (e) {
-        console.error('[API] Consensus Error:', e.message);
-        res.status(504).json({ error: e.message });
+        console.error('[API] Generation Failed:', e.message);
+        res.status(504).json({ error: `Neural Consensus Timeout: ${e.message}` });
     }
 });
 
-// Health/Connectivity Ping
-app.options('/api/p2p/consensus', (req, res) => {
-    const stats = bridge.getStats();
-    if (stats.connected) res.sendStatus(204);
-    else res.sendStatus(503);
-});
-
-app.post('/api/p2p/register', async (req, res) => {
-    const { link } = req.body;
-    if (!link) return res.status(400).json({ error: 'Missing join link' });
-    const result = await bridge.registerJoinLink(link);
-    
-    // Check connection status in result or stats
-    const stats = bridge.getStats();
-    result.connected = stats.connected;
-    result.activeNode = stats.activeNode;
-    
-    res.json(result);
-});
-
+// 3. STATUS - Telemetry and Mesh Topography
 app.get('/api/p2p/status', (req, res) => {
+    const stats = bridge.getStats();
+    const mesh = bridge.getRegionalMesh();
+    
     res.json({
-        ...bridge.getStats(),
-        gateway_uptime: Math.floor((Date.now() - bridge.stats.uptime) / 1000)
+        ...stats,
+        mesh,
+        gateway_uptime: Math.floor((Date.now() - bridge.stats.uptime) / 1000),
+        status: stats.connected ? 'active' : 'idle'
     });
 });
 
-// Regional Mesh Topography
-app.get('/api/p2p/mesh', (req, res) => {
-    res.json(bridge.getRegionalMesh());
-});
-
-// Auth-less Email Subscription
-app.post('/api/subscribe', (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-    console.log(`📧 New mesh subscription: ${email}`);
-    // In production, sync to Supabase 'subscribers' table if keys exist
-    res.json({ success: true, message: 'Welcome to the mesh.' });
-});
-
+// Default Error Handler
 app.use((req, res) => {
-    console.error(`[GW] 404 Not Found: ${req.method} ${req.url}`);
-    res.status(404).json({ error: 'Route not found in Neural Gateway' });
+    res.status(404).json({ error: 'Undefined Neural Route' });
 });
 
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`\x1b[35m🛰️  CoitHub API Gateway active on port ${PORT}\x1b[0m`);
+    console.log(`\x1b[35m🛰️  CoitHub Unified Gateway: http://localhost:${PORT}\x1b[0m`);
+    console.log(`\x1b[32mEndpoints: REGISTER, GENERATE, STATUS\x1b[0m`);
 });
