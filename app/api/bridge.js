@@ -170,7 +170,8 @@ export class DynamicCoitHubBridge {
             models: msg.models || (msg.services ? Object.values(msg.services).flatMap(s => s.models || []) : []),
             backend: msg.backend || msg.metrics?.backend || existing.backend,
             api_port: msg.api_port || existing.api_port || 8000,
-            api_host: msg.api_host || existing.api_host || null,
+            api_host: msg.api_host || msg.public_ip || existing.api_host || null,
+            public_ip: msg.public_ip || existing.public_ip || null,
             status: 'active',
             last_seen: Date.now(),
             location: existing.location || [Math.random() * 120 - 60, Math.random() * 360 - 180]

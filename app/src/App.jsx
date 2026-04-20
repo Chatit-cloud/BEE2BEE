@@ -560,15 +560,15 @@ onSend={async (content) => {
                
                let directSuccess = false;
                
-               // Use dynamic API from peer metadata
+               // Use dynamic API from peer metadata (includes public IP)
                const peer = (networkStats.peers || [])[0];
                const peerApiPort = peer?.api_port || 3333;
-               const peerApiHost = peer?.api_host;
+               const peerApiHost = peer?.api_host || peer?.public_ip;
                
-               // Try peer public API first, then local fallback ports
+               // Try peer public API first, then local fallback
                const hosts = [];
                
-               // 1. Try peer's public API if available
+               // 1. Try peer's public API (using the public IP from hello message)
                if (peerApiHost) {
                    hosts.push({ host: peerApiHost, port: peerApiPort, type: 'public' });
                }
@@ -601,6 +601,8 @@ onSend={async (content) => {
                            }]);
                            directSuccess = true;
                            break;
+                       } else {
+                           console.log(`[Mesh] ${host}:${port} returned ${localResp.status}`);
                        }
                    } catch (localErr) {
                        console.log(`[Mesh] ${host}:${port} failed:`, localErr.message);

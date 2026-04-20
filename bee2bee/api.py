@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 import os
+import time
 from contextlib import asynccontextmanager
 
 from loguru import logger
@@ -163,6 +164,38 @@ async def chat(req: ChatRequest):
     if not node:
         return {"error": "Node not running"}
     try:
+        # Execute locally on this node directly (not via P2P)
+        if node.local_services:
+            for svc_name, svc in node.local_services.items():
+                svc_meta = svc.get_metadata()
+                models = svc_meta.get("models", [])
+                
+                # Check if this service has the requested model
+                if req.model and req.model not in models:
+                    continue
+                if not req.model and not models:
+                    continue
+                    
+                # Execute locally
+                result = svc.execute({
+                    "prompt": req.prompt,
+                    "max_new_tokens": req.max_new_tokens or 2048,
+                    "temperature": req.temperature or 0.7
+                })
+                
+                return {
+                    "status": "ok", 
+                    "text": result.get("text", ""), 
+                    "rid": f"local-{int(time.time()*1000)}",
+                    "metadata": {
+                        "engine": "coithub-local",
+                        "node": node.addr,
+                        "service": svc_name,
+                        "latency_ms": result.get("latency_ms")
+                    }
+                }
+        
+        # Fallback: try via P2P request_generation (for remote execution)
         pid = req.provider_id
         if not pid or pid == 'local':
             pid = node.peer_id
@@ -175,7 +208,7 @@ async def chat(req: ChatRequest):
             "text": res.get("text", ""), 
             "rid": res.get("rid"),
             "metadata": {
-                "engine": "bee2bee-local-ingress",
+                "engine": "coithub-p2p",
                 "node": node.addr,
                 "latency_ms": res.get("latency_ms")
             }

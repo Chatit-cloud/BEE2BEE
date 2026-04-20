@@ -270,6 +270,9 @@ class P2PNode:
             
         self.addr = f"ws://{display_host}:{display_port}"
         
+        # Store the public IP for API access
+        self.public_host = display_host
+        
         # Start monitoring loop
         self._monitor_active = True
         asyncio.create_task(self._monitoring_loop(15))
@@ -432,6 +435,9 @@ class P2PNode:
             name: svc.get_metadata() 
             for name, svc in self.local_services.items()
         }
+        # Use public host if available for API access
+        api_host = getattr(self, 'public_host', None) or getattr(self, 'announce_host', None) or self.host
+        
         return {
             "type": "hello",
             "peer_id": self.peer_id,
@@ -440,7 +446,8 @@ class P2PNode:
             "metrics": get_system_metrics(),
             "services": services_meta,
             "api_port": getattr(self, 'api_port', 8000),
-            "api_host": getattr(self, 'api_host', self.announce_host or self.host)
+            "api_host": api_host,
+            "public_ip": getattr(self, 'public_host', None)
         }
 
     async def _on_message(self, ws, data: Dict[str, Any]):
