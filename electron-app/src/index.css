@@ -1,67 +1,47 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;500&family=Space+Grotesk:wght@300;400&display=swap');
 
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #09090b;
-  --color-primary: #18181b;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f4f4f5;
-  --color-secondary-foreground: #18181b;
-  --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
-  --color-accent: #f4f4f5;
-  --color-accent-foreground: #18181b;
-  --color-border: #e4e4e7;
-  --color-input: #e4e4e7;
-  --color-ring: #18181b;
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'Space Grotesk', monospace;
+}
 
-  --radius-lg: 0.5rem;
-  --radius-md: calc(0.5rem - 2px);
-  --radius-sm: calc(0.5rem - 4px);
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --primary: #000000;
+  --accent: #f5f5f7;
+  --border: #e5e5e7;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
 }
 
-:root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-sans);
-  overflow-x: hidden;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #e4e4e7;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
   border-radius: 10px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #d4d4d8;
-}
-
-.glass {
-  @apply bg-white/70 backdrop-blur-md border border-white/20;
-}
-
-.dark-glass {
-  @apply bg-black/70 backdrop-blur-md border border-white/10;
+::selection {
+  background: rgba(0, 0, 0, 0.05);
 }
