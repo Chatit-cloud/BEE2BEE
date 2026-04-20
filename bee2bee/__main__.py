@@ -37,39 +37,42 @@ def cli():
 @click.option('--host', default='0.0.0.0', help='Bind host')
 @click.option('--port', default=0, type=int, help='Bind port')
 @click.option('--public-host', default=None, help='Public IP/Hostname')
-@click.option('--region', default='Auto', help='Region name (e.g. US-East, Europe)')
-def serve_ollama(model, host, port, public_host, region):
-    """Serve a local Ollama model."""
+@click.option('--region', default='Auto', help='Region name')
+@click.option('--api-port', default=8000, type=int, help='FastAPI port for local access')
+def serve_ollama(model, host, port, public_host, region, api_port):
+    """Serve a local Ollama model with P2P connectivity."""
     bootstrap = get_bootstrap_url()
     asyncio.run(run_p2p_node(
         host=host, port=port, bootstrap_link=bootstrap,
         model_name=model, backend="ollama", announce_host=public_host,
-        region=region
+        region=region, api_port=api_port
     ))
 
 @cli.command()
 @click.option('--model', default='distilgpt2', help='HF model name')
 @click.option('--port', default=0, type=int, help='Bind port')
 @click.option('--region', default='Auto', help='Region name')
-def serve_hf(model, port, region):
-    """Serve a local Hugging Face model."""
+@click.option('--api-port', default=8000, type=int, help='FastAPI port')
+def serve_hf(model, port, region, api_port):
+    """Serve a local Hugging Face model with built-in FastAPI."""
     bootstrap = get_bootstrap_url()
     asyncio.run(run_p2p_node(
         port=port, bootstrap_link=bootstrap,
-        model_name=model, backend="hf", region=region
+        model_name=model, backend="hf", region=region, api_port=api_port
     ))
 
 @cli.command()
 @click.option('--model', default='meta-llama/Llama-2-7b-hf', help='HF model name')
 @click.option('--token', required=True, help='HF API Token')
 @click.option('--region', default='Cloud', help='Region name')
-def serve_hf_remote(model, token, region):
-    """Serve via HF Inference API."""
+@click.option('--api-port', default=8000, type=int, help='FastAPI port')
+def serve_hf_remote(model, token, region, api_port):
+    """Serve via HF Inference API with a local FastAPI proxy."""
     os.environ["HUGGING_FACE_HUB_TOKEN"] = token
     bootstrap = get_bootstrap_url()
     asyncio.run(run_p2p_node(
         bootstrap_link=bootstrap, model_name=model,
-        backend="hf_remote", region=region
+        backend="hf_remote", region=region, api_port=api_port
     ))
 
 @cli.command()
