@@ -27,6 +27,11 @@ console = Console()
 
 from .config import get_bootstrap_url, set_bootstrap_url, load_config
 
+@click.group()
+def cli():
+    """Bee2Bee: Decentralized Neural Mesh Orchestration."""
+    pass
+
 @cli.command()
 @click.option('--model', default='llama3', help='Ollama model name')
 @click.option('--host', default='0.0.0.0', help='Bind host')
@@ -103,12 +108,6 @@ def register(region, test):
         await node.stop()
         
     asyncio.run(_reg())
-
-if __name__ == "__main__":
-    cli()
-e
-
-
 
 if __name__ == "__main__":
     cli()
