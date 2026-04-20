@@ -539,28 +539,54 @@ class P2PNode:
     async def _handle_gen_request(self, ws, data):
         rid = data.get("rid")
         svc_name = data.get("svc", "hf")
-        logger.info(f"Generation request {rid} for service {svc_name}")
+        model_name = data.get("model")
+        logger.info(f"Generation request {rid} for {model_name} (preferred svc: {svc_name})")
         
-        # Determine service
+        # 1. Local Execution Primary
         svc = self.local_services.get(svc_name)
-        
-        if not svc:
-            logger.error(f"Service {svc_name} not found locally")
-            await self._send(ws, {"type": "gen_result", "rid": rid, "error": "no_service"})
+        if not svc and model_name:
+            for s, inst in self.local_services.items():
+                if model_name in inst.get_metadata().get("models", []):
+                    svc, svc_name = inst, s
+                    break
+
+        if svc:
+            try:
+                logger.debug(f"Executing locally via {svc_name}")
+                result = svc.execute(data)
+                response = {"type": "gen_result", "rid": rid, **result}
+                await self._send(ws, response)
+                logger.success(f"Local execution target {rid} reached")
+            except Exception as e:
+                logger.error(f"Local failure: {e}")
+                await self._send(ws, {"type": "gen_result", "rid": rid, "error": f"local_error: {str(e)}"})
             return
-            
-        try:
-            logger.debug(f"Executing service {svc_name}")
-            result = svc.execute(data)
-            response = {"type": "gen_result", "rid": rid, **result}
-            await self._send(ws, response)
-            logger.success(f"Sent generation result for {rid}")
-        except ServiceError as e:
-            logger.error(f"Service error for {rid}: {e}")
-            await self._send(ws, {"type": "gen_result", "rid": rid, "error": str(e)})
-        except Exception as e:
-            logger.error(f"Unexpected error for {rid}: {e}")
-            await self._send(ws, {"type": "gen_result", "rid": rid, "error": f"internal_error: {str(e)}"})
+
+        # 2. Swarm Relay / Forwarding Logic
+        if model_name:
+            provider = self.pick_provider(model_name)
+            if provider:
+                pid, meta = provider
+                logger.info(f"Relaying request {rid} -> Swarm Peer {pid}")
+                try:
+                    result = await self.request_generation(
+                        provider_id=pid,
+                        prompt=data.get("prompt", ""),
+                        max_new_tokens=data.get("max_new_tokens", data.get("max_tokens", 512)),
+                        model_name=model_name
+                    )
+                    # Forward result back to the original requester
+                    response = {"type": "gen_result", "rid": rid, **result}
+                    await self._send(ws, response)
+                    logger.success(f"Swarm Relay complete for {rid} via {pid}")
+                    return
+                except Exception as e:
+                    logger.error(f"Swarm Link Failed for {rid}: {e}")
+                    await self._send(ws, {"type": "gen_result", "rid": rid, "error": f"relay_link_failure: {str(e)}"})
+                    return
+
+        logger.error(f"Neural Deadlock: No target found for model {model_name}")
+        await self._send(ws, {"type": "gen_result", "rid": rid, "error": "consensus_deadlock: no_node_available"})
 
     async def _handle_gen_result(self, ws, data):
         rid = data.get("rid")

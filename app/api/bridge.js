@@ -151,15 +151,20 @@ export class DynamicBee2BeeBridge {
     }
 
     async request(task) {
-        // If we have an active persistent connection, use it (Fast/Low Latency)
+        const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
+
+        // 1. Swarm-Backbone Primary (Persistent WebSocket)
+        // If we have any connection, we use it. The Swarm Hub will now auto-forward.
         if (this.activeWs && this.activeWs.readyState === 1) {
-            const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
+            console.log(`[Mesh] Dispatching ${rid} to Neural Swarm Hub: ${this.activeUrl}`);
             return new Promise((resolve, reject) => {
                 this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
+                
+                // Allow up to 300s for heavy models (31B+)
                 setTimeout(() => {
                     if (this.pendingRequests.has(rid)) {
                         this.pendingRequests.delete(rid);
-                        reject(new Error('Neural Consensus Timeout (300s)'));
+                        reject(new Error('Neural Consensus Timeout (300s). The node is likely loading model or executing high-compute task.'));
                     }
                 }, 300000);
 
@@ -168,26 +173,33 @@ export class DynamicBee2BeeBridge {
                     rid,
                     prompt: task.prompt,
                     model: task.model,
-                    svc: 'ollama' // Default to ollama for now or infer from metadata
+                    svc: 'ollama' // Swarm will auto-resolve if svc differs
                 }));
             });
         }
 
-        // --- Serverless/Vercel Fallback: Direct HTTP Routing ---
-        console.log('[Mesh] Operating in Stateless/Serverless Mode. Routing direct...');
+        // 2. Serverless/Direct-HTTP Fallback
+        console.log('[Mesh] Operating in Stateless Mode. Syncing Global Mesh...');
         await this.syncGlobalMesh();
         
         const targetPeer = Array.from(this.peerMetadata.values()).find(p => 
             p.models && p.models.includes(task.model)
         );
 
-        if (!targetPeer) throw new Error(`Deep Mesh Search: No nodes found for model ${task.model}`);
+        if (!targetPeer) {
+            // Even if we don't have metadata, try connecting to seeds if we were empty
+            if (this.nodes.size > 0 && !this.activeWs) {
+                 await this.connect();
+                 if (this.activeWs) return this.request(task);
+            }
+            throw new Error(`Neural Search Failure: No nodes available for model "${task.model}"`);
+        }
 
-        // Infer FastAPI address (standard nodes use port 8000 for API)
+        // Default to port 8000 for FastAPI fallback
         let apiUrl = targetPeer.addr.replace('ws://', 'http://').replace(':4001', ':8000');
         if (targetPeer.metrics?.api_url) apiUrl = targetPeer.metrics.api_url;
 
-        console.log(`[Mesh] Forwarding to Neural Gateway: ${apiUrl}`);
+        console.log(`[Mesh] Forwarding to Neural Peer: ${apiUrl}`);
         
         try {
             const resp = await fetch(`${apiUrl}/chat`, {
@@ -200,12 +212,12 @@ export class DynamicBee2BeeBridge {
                 })
             });
             
-            if (!resp.ok) throw new Error(`Node Gateway Error: ${resp.status}`);
+            if (!resp.ok) throw new Error(`Status ${resp.status}`);
             const data = await resp.json();
             
             return {
                 text: data.response || data.text,
-                rid: `srv-${crypto.randomBytes(2).toString('hex')}`,
+                rid,
                 metadata: {
                     trust_score: 1.0,
                     backend: 'fastapi-direct',
@@ -213,8 +225,13 @@ export class DynamicBee2BeeBridge {
                 }
             };
         } catch (e) {
-            console.error(`[Mesh] Serverless Route Failed: ${e.message}`);
-            throw new Error(`Consensus Failed: Node at ${targetPeer.addr} unreachable via HTTP.`);
+            console.error(`[Mesh] Peer routing failed: ${e.message}`);
+            // Final fallback: try to re-establish a hub connection if possible
+            if (!this.activeWs) {
+                await this.connect();
+                if (this.activeWs) return this.request(task);
+            }
+            throw new Error(`Consensus Failed: Node at ${targetPeer.addr} unreachable. Error: ${e.message}`);
         }
     }
 
