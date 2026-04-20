@@ -159,9 +159,9 @@ export class DynamicBee2BeeBridge {
                 setTimeout(() => {
                     if (this.pendingRequests.has(rid)) {
                         this.pendingRequests.delete(rid);
-                        reject(new Error('Neural Consensus Timeout (120s)'));
+                        reject(new Error('Neural Consensus Timeout (300s)'));
                     }
-                }, 120000);
+                }, 300000);
 
                 this.activeWs.send(JSON.stringify({
                     type: 'gen_request',
