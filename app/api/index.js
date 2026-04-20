@@ -55,10 +55,10 @@ app.post('/api/p2p/consensus', async (req, res) => {
     }
 });
 
-app.post('/api/p2p/register', (req, res) => {
+app.post('/api/p2p/register', async (req, res) => {
     const { link } = req.body;
     if (!link) return res.status(400).json({ error: 'Missing join link' });
-    const result = bridge.registerJoinLink(link);
+    const result = await bridge.registerJoinLink(link);
     res.json(result);
 });
 

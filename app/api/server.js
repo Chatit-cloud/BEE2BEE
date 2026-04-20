@@ -91,17 +91,15 @@ app.options('/api/p2p/consensus', (req, res) => {
     else res.sendStatus(503);
 });
 
-app.post('/api/p2p/register', (req, res) => {
+app.post('/api/p2p/register', async (req, res) => {
     const { link } = req.body;
     if (!link) return res.status(400).json({ error: 'Missing join link' });
-    const result = bridge.registerJoinLink(link);
+    const result = await bridge.registerJoinLink(link);
     
-    // Wait a moment and check connection
-    setTimeout(() => {
-        const stats = bridge.getStats();
-        result.connected = stats.connected;
-        result.activeNode = stats.activeNode;
-    }, 1000);
+    // Check connection status in result or stats
+    const stats = bridge.getStats();
+    result.connected = stats.connected;
+    result.activeNode = stats.activeNode;
     
     res.json(result);
 });

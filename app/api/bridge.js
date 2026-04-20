@@ -291,7 +291,7 @@ export class DynamicCoitHubBridge {
         };
     }
 
-    registerJoinLink(link) {
+    async registerJoinLink(link) {
         try {
             const url = new URL(link);
             const bootstrapEnc = url.searchParams.get('bootstrap') || url.searchParams.get('peer');
