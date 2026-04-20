@@ -12,14 +12,13 @@ from loguru import logger
 import httpx
 
 
-import os
-import httpx
 from .p2p import parse_join_link, sha256_hex_bytes
 from .utils import new_id, is_colab
 from .pieces import split_pieces, piece_hashes
 from .services import BaseService, HFService, ServiceError
 from .nat import try_upnp_map
 from .nat import auto_port_forward, try_stun, get_public_ip
+from .registry import RegistryClient
 
 # In Colab/Jupyter, rich auto-detects HTML output which often buffers or fails in subprocesses.
 # We force terminal mode to ensure we get raw text streaming.
@@ -37,8 +36,7 @@ class P2PNode:
         self.announce_host = announce_host
         self.announce_port = announce_port
         self.peer_id = new_id("peer")
-        self.supabase_url = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        self.registry = RegistryClient()
         
         # We'll set self.addr after start() once we know the port
         self.addr = "" 
@@ -67,54 +65,32 @@ class P2PNode:
         while self._monitor_active and self._running:
             try:
                 await self._run_health_checks()
-                if self.supabase_url and self.supabase_key:
+                if self.registry.enabled:
                     await self.sync_with_registry()
             except Exception as e:
-                console.print(f"[red]Monitoring Error: {e}[/red]")
+                logger.error(f"Monitoring Error: {e}")
             await asyncio.sleep(interval)
 
     async def sync_with_registry(self):
         """Register/Update this node in the global Supabase directory."""
-        if not self.addr: return
-        
-        # Determine region (mock or based on IP later)
-        region = "global"
-        if "EG" in self.peer_id: region = "EG"
+        if not self.addr or not self.registry.enabled:
+            return
         
         models = []
         for svc in self.local_services.values():
             meta = svc.get_metadata()
             if "models" in meta:
                 models.extend(meta["models"])
+            elif "model" in meta:
+                models.append(meta["model"])
         
-        payload = {
-            "peer_id": self.peer_id,
-            "addr": self.addr,
-            "models": list(set(models)),
-            "region": region,
-            "status": "online",
-            "last_seen": "now()",
-            "metadata": {
-                "port": self.port,
-                "uptime": time.time()
-            }
-        }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                # Upsert into active_nodes
-                # Supabase REST API uses Prefer: resolution=merge-duplicates for upsert
-                headers = {
-                    "apikey": self.supabase_key,
-                    "Authorization": f"Bearer {self.supabase_key}",
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates"
-                }
-                url = f"{self.supabase_url}/rest/v1/active_nodes?peer_id=eq.{self.peer_id}"
-                await client.post(f"{self.supabase_url}/rest/v1/active_nodes", json=payload, headers=headers)
-                logger.debug(f"Synced registry for {self.peer_id}")
-        except Exception as e:
-            logger.warning(f"Failed to sync with global registry: {e}")
+        # Deduplicate and sync
+        await self.registry.sync_node(
+            peer_id=self.peer_id,
+            address=self.addr,
+            models=list(set(models)),
+            tag="pypi-production"
+        )
 
     async def _run_health_checks(self):
         from .utils import now_ms, get_system_metrics

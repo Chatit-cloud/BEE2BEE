@@ -36,6 +36,7 @@ dependencies = [
   "loguru>=0.7.2",
   "python-dotenv>=1.0.0",
   "huggingface-hub>=0.23.0",
+  "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]

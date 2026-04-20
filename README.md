@@ -1,24 +1,33 @@
-Bee2Bee
-=======
+# Bee2Bee: Decentralized P2P AI Network
 
-<div align="center">
-  <a href="https://www.producthunt.com/products/connect-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bee2bee" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1048013&theme=dark&t=1765265705335" alt="Bee2Bee - BEE2BEE&#0058;&#0032;Return&#0032;to&#0032;Decentralized&#0032;AI | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-</div>
+[![PyPI version](https://badge.fury.io/py/bee2bee.svg)](https://badge.fury.io/py/bee2bee)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-# Bee2Bee: Decentralized AI Network
+**Bee2Bee** is a next-generation peer-to-peer network for distributed AI. It allows you to transform any hardware—from local high-end GPUs to cloud instances and Google Colab—into a global AI node with zero-config networking.
 
-**Bee2Bee** is a peer-to-peer network that allows you to easily deploy, route, and access AI models across any infrastructure (Local, Cloud, Colab) without complex networking configuration.
+---
+
+## 📦 Installation
+
+```bash
+pip install bee2bee
+```
+
+*For specific backends (Transformers, Torch, ONNX):*
+```bash
+pip install "bee2bee[hf,torch]"
+```
 
 ---
 
 ## 🏗 System Architecture
 
-The ecosystem consists of four main components:
+The Bee2Bee ecosystem is designed for resilience and low latency:
 
-1.  **Main Point (Tracker/API)**: The central supervisor that tracks active peers and exposes the HTTP API.
-2.  **Worker Nodes (Providers)**: Machines that run `deploy-hf` to host AI models and serve requests.
-3.  **Desktop App (Frontend)**: An Electron+React UI for managing the network and chatting with models.
-4.  **Bee2Bee Cloud (Colab)**: A Google Colab notebook acting as a Cloud Node using Hybrid Tunneling.
+1.  **Main Point (Tracker/API)**: Orchestrates the P2P mesh and exposes a unified REST API for inference.
+2.  **Worker Nodes (Providers)**: The compute engine. Hosts models (Ollama, HF, Remote) and registers with the Global Registry.
+3.  **Global Registry (Supabase)**: Provides a redundant discovery layer for real-time peer telemetry and maps.
+4.  **Desktop App (Frontend)**: A minimalist, typography-first dashboard for network management and chat.
 
 ---
 
