@@ -234,56 +234,151 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
   );
 };
 
-// --- Dashboard Component (Restored) ---
-const Dashboard = ({ networkStats, messages, isProcessing, onSend, onRegister }) => {
+// --- Dashboard Component (Redesigned: Gemini B&W Style) ---
+const Dashboard = ({ networkStats, messages, isProcessing, onSend }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  
+  useEffect(() => { 
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); 
+  }, [messages]);
+
+  const handleCommit = () => {
+    if (!input.trim() || isProcessing) return;
+    onSend(input);
+    setInput('');
+  };
 
   return (
-    <div className="flex h-screen bg-white text-[#202124] font-sans">
-      <aside className="w-72 bg-[#f8f9fa] border-r border-[#dadce0] flex flex-col p-6">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-            <Layers className="w-5 h-5 text-white" />
+    <div className="flex h-screen bg-white text-black font-sans selection:bg-black selection:text-white">
+      {/* Mini Sidebar */}
+      <aside className="w-16 md:w-64 bg-white border-r border-gray-100 flex flex-col items-center md:items-stretch p-4 transition-all duration-300">
+        <div className="flex items-center gap-3 mb-12 mt-2 px-2">
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shrink-0">
+             <Layers className="w-4 h-4 text-white" />
           </div>
-          <h1 className="font-bold text-lg">Bee2Bee</h1>
+          <h1 className="font-bold text-sm hidden md:block tracking-tight text-black">Bee2Bee</h1>
         </div>
-        <div className="flex-1 space-y-6">
-           <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
-              <p className="text-[9px] font-bold text-gray-300 uppercase mb-2">Connected ID</p>
-              <p className="text-[10px] font-mono truncate">{networkStats.activeNode}</p>
+        
+        <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
+           <div className="p-3 md:p-4 bg-gray-50 rounded-2xl border border-gray-100">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 hidden md:block">Network Pool</p>
+              <div className="flex items-center justify-between">
+                 <div className="flex flex-col">
+                    <span className="text-xl font-light leading-none">{networkStats.poolSize}</span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase md:hidden mt-0.5">NODES</span>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase hidden md:block">Nodes Online</span>
+                 </div>
+                 <Activity className="w-4 h-4 text-black hidden md:block opacity-20" />
+              </div>
            </div>
-           <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
-                 <p className="text-xl font-bold">{networkStats.totalPeers}</p>
-                 <p className="text-[9px] font-bold text-gray-300 uppercase">Peers</p>
+
+           <div className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
+              <div className="flex items-center gap-3">
+                 <Globe className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                 <span className="text-xs font-medium hidden md:block">Mesh Map</span>
               </div>
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
-                 <p className="text-xl font-bold">{networkStats.poolSize}</p>
-                 <p className="text-[9px] font-bold text-gray-300 uppercase">Nodes</p>
+           </div>
+           
+           <div className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
+              <div className="flex items-center gap-3">
+                 <Zap className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                 <span className="text-xs font-medium hidden md:block">Performance</span>
               </div>
+           </div>
+        </div>
+
+        <div className="mt-auto p-2">
+           <div className="w-full h-10 bg-gray-50 rounded-xl flex items-center justify-center cursor-pointer hover:bg-black group transition-all">
+              <Settings className="w-4 h-4 text-gray-400 group-hover:text-white" />
            </div>
         </div>
       </aside>
-      <main className="flex-1 flex flex-col">
-         <div className="w-full h-80 border-b border-gray-50 flex items-center justify-center relative bg-[#fafafa]">
-            <NeuralMap peers={networkStats.peers} />
-         </div>
-         <div className="flex-1 overflow-y-auto px-10 py-10 space-y-8 no-scrollbar">
-            {messages.map((m, i) => (
-               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-xl ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-                     <p className={`text-2xl font-light ${m.role === 'user' ? 'text-black' : 'text-gray-400'}`}>{m.text}</p>
+
+      {/* Chat Area */}
+      <main className="flex-1 flex flex-col relative">
+         {/* Top Bar */}
+         <header className="h-16 border-b border-gray-50 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+            <div className="flex items-center gap-2">
+               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+               <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Stable Protocol v3.3.6</span>
+            </div>
+            <div className="flex items-center gap-4">
+               <span className="text-[10px] font-bold text-gray-300 font-mono hidden sm:block">{networkStats.activeNode}</span>
+            </div>
+         </header>
+
+         {/* Messages Container */}
+         <div className="flex-1 overflow-y-auto pt-12 pb-32 no-scrollbar">
+            <div className="max-w-3xl mx-auto px-6 space-y-12">
+               {messages.length === 0 && (
+                  <div className="py-20 text-center space-y-4 animate-in fade-in duration-1000">
+                     <h2 className="text-4xl md:text-5xl font-light tracking-tight text-gray-200">How can Bee2Bee help you?</h2>
+                     <p className="text-xs text-gray-300 font-medium uppercase tracking-[0.2em]">Decentralized Neural Cluster — Private & Permissionless</p>
                   </div>
-               </div>
-            ))}
-            <div ref={messagesEndRef} />
+               )}
+
+               {messages.map((m, i) => (
+                  <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-500`}>
+                     <div className={`flex items-start gap-4 max-w-[85%] md:max-w-[80%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        {m.role === 'ai' && (
+                           <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center shrink-0 mt-1 shadow-lg shadow-black/10">
+                              <Cpu className="w-4 h-4 text-white" />
+                           </div>
+                        )}
+                        <div className={`space-y-1 ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
+                           <p className={`text-[15px] leading-relaxed font-normal whitespace-pre-wrap ${m.role === 'user' ? 'bg-gray-100 py-3 px-5 rounded-[24px] rounded-tr-none text-black' : 'text-black py-1'}`}>
+                              {m.text}
+                           </p>
+                           {m.metadata && (
+                              <div className="flex items-center gap-3 mt-4 opacity-30 group-hover:opacity-100 transition-opacity">
+                                 <span className="text-[8px] font-bold uppercase tracking-widest">{m.metadata.neural_path || 'Cloud'}</span>
+                                 <span className="text-[8px] font-bold uppercase tracking-widest">{m.metadata.latency_ms}ms</span>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+               ))}
+               {isProcessing && (
+                  <div className="flex items-start gap-4 animate-pulse">
+                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                        <Cpu className="w-4 h-4 text-gray-300" />
+                     </div>
+                     <div className="space-y-2 py-3 w-full">
+                        <div className="h-2 bg-gray-100 rounded-full w-3/4" />
+                        <div className="h-2 bg-gray-100 rounded-full w-1/2" />
+                     </div>
+                  </div>
+               )}
+               <div ref={messagesEndRef} />
+            </div>
          </div>
-         <div className="p-10 pt-0 flex gap-4 max-w-4xl mx-auto w-full">
-            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSend(input) && setInput('')}
-               placeholder="Neural Query..." className="flex-1 h-16 bg-gray-100 rounded-3xl px-8 text-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" />
-            <button onClick={() => { onSend(input); setInput(''); }} className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center"><Send className="w-6 h-6" /></button>
+
+         {/* Floating Input Bar (Gemini Style) */}
+         <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none">
+            <div className="max-w-3xl mx-auto pointer-events-auto">
+               <div className="relative group">
+                  <div className="absolute inset-0 bg-black/5 rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                  <div className="relative flex items-center gap-2 p-2 pl-6 bg-[#f0f2f5] border border-transparent focus-within:border-gray-200 focus-within:bg-white rounded-[32px] transition-all duration-300 shadow-sm">
+                     <input 
+                        value={input} 
+                        onChange={e => setInput(e.target.value)} 
+                        onKeyDown={e => e.key === 'Enter' && handleCommit()}
+                        placeholder="Message Bee2Bee..." 
+                        className="flex-1 h-12 bg-transparent text-[15px] text-black placeholder:text-gray-400 outline-none" 
+                     />
+                     <button 
+                        onClick={handleCommit}
+                        disabled={!input.trim() || isProcessing}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${input.trim() && !isProcessing ? 'bg-black text-white hover:scale-105 active:scale-95' : 'bg-transparent text-gray-300 cursor-not-allowed'}`}
+                     >
+                        <Send className="w-5 h-5" />
+                     </button>
+                  </div>
+                  <p className="text-[9px] text-center text-gray-300 mt-4 font-bold uppercase tracking-widest">Bee2Bee may hallucinate. Verify critical outputs.</p>
+               </div>
+            </div>
          </div>
       </main>
     </div>
@@ -300,12 +395,10 @@ export default function App() {
   const [meshData, setMeshData] = useState({});
 
   useEffect(() => {
-    // Check for deep link in URL
     const params = new URLSearchParams(window.location.search);
     const link = params.get('link');
     if (link) {
-      const model = params.get('model') || 'Neural Node';
-      setLinkData({ link, model });
+      setLinkData({ link, model: params.get('model') || 'Neural Node' });
       setView('quick-register');
     }
 
@@ -327,8 +420,8 @@ export default function App() {
   const handleSelectNode = (node) => {
     setMessages([{ 
       role: 'ai', 
-      text: `Handshake successful with ${node.region} cluster. Real-time inference unlocked.`,
-      metadata: { trust_score: 1.0, neural_path: node.addr }
+      text: `Link established. Regional cluster: ${node.region}. Neural pathways ready for inference.`,
+      metadata: { neural_path: node.addr, latency_ms: node.latency }
     }]);
     setView('dashboard');
   };
@@ -350,17 +443,17 @@ export default function App() {
             const response = await fetch('/api/p2p/consensus', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ task: { prompt: content, model: 'glm-4.6:cloud' } })
+              body: JSON.stringify({ task: { prompt: content, model: 'llama3' } }) // Use llama3 as default compatible match
             });
             const data = await response.json();
-            setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed.", metadata: data.metadata }]);
+            setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (Node Timeout).", metadata: data.metadata }]);
           } catch { 
-            setMessages(prev => [...prev, { role: 'ai', text: "Link Failed.", metadata: { trust_score: 0 } }]); 
+            setMessages(prev => [...prev, { role: 'ai', text: "Bridge Offline.", metadata: { trust_score: 0 } }]); 
           } finally { setIsProcessing(false); }
       }}
     />
   );
 }
 
-// Support imports for new UI
+// Support imports
 import { MapPin } from 'lucide-react';

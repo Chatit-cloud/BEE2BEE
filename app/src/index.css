@@ -4,21 +4,22 @@
 @theme {
   --font-sans: 'Inter', sans-serif;
   --color-primary: #000000;
-  --color-accent: #1a73e8;
+  --color-accent: #000000;
   --color-bg: #ffffff;
-  --color-border: #f1f3f4;
-  --color-text-muted: #5f6368;
+  --color-border: #f0f0f0;
+  --color-text-muted: #888888;
 }
 
 :root {
-  background-color: var(--color-bg);
-  color: #202124;
+  background-color: #ffffff;
+  color: #000000;
   font-family: var(--font-sans);
 }
 
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  background-color: #ffffff;
 }
 
 /* Custom Utilities */
@@ -31,22 +32,33 @@ body {
 }
 
 .pill-btn {
-  @apply h-14 px-10 rounded-full font-bold text-[10px] tracking-widest uppercase transition-all flex items-center justify-center;
+  @apply h-14 px-10 rounded-full font-semibold text-[11px] tracking-[0.2em] uppercase transition-all flex items-center justify-center;
 }
 
-.bento-box {
-  @apply bg-white border border-[#f1f3f4] rounded-3xl p-6 transition-all hover:bg-gray-50/50;
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+.animate-chat-entry {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+@keyframes fadeInScale {
+  from { transform: scale(0.98); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-scale {
+  animation: fadeInScale 0.6s ease-out forwards;
 }
 
 /* Scrollbar hide */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Selection */
+::selection {
+  background: #000000;
+  color: #ffffff;
+}
