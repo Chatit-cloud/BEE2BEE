@@ -279,7 +279,7 @@ class P2PNode:
 
     async def connect_bootstrap(self, link_or_addr: str):
         addrs: List[str]
-        if link_or_addr.startswith("p2pnet://"):
+        if any(link_or_addr.startswith(p) for p in ["p2pnet://", "coithub://", "coithub.org://"]):
             parsed = parse_join_link(link_or_addr)
             addrs = [a for a in parsed.get("bootstrap", [])]
             logger.info(f"Parsed join link, bootstrap addresses: {addrs}")
@@ -790,8 +790,16 @@ async def run_p2p_node(
             # We'll just advertise the model name.
             join_link = generate_join_link("connectit", model_name, model_hash, [node.addr])
             
+            # --- One-Click Registration Link ---
+            # Standard console link if terminal supports it
+            web_reg_url = f"https://coithub.org/register?link={join_link}&region={region}&tag={backend}"
+            
+            console.print(f"\n[bold green]✨ One-Click Registration Enabled[/bold green]")
+            console.print(f"[blue]Register and Monitor live at:[/blue] [link={web_reg_url}]{web_reg_url}[/link]")
+            console.print(f"[dim]Click the link above to fill survey and start performance tracking.[/dim]\n")
+
             console.print(f"[cyan]Model:[/cyan] {model_name} ({backend})")
-            console.print(f"[blue]Join Link:[/blue] {join_link}")
+            console.print(f"[blue]Deep Link:[/blue] {join_link}")
 
     # Initial sync
     if node.registry.enabled:

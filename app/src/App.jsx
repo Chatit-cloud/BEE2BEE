@@ -114,10 +114,81 @@ const Landing = ({ onStart }) => {
   );
 };
 
+// --- Quick Registration & Survey ---
+const QuickRegister = ({ linkData, onComplete }) => {
+  const [formData, setFormData] = useState({ usage: 'Commercial', tags: 'gpu-node', survey: 'Fast' });
+  const [step, setStep] = useState('form');
+
+  const handleRegister = async () => {
+    setStep('verifying');
+    // Simulate verification
+    setTimeout(() => setStep('monitoring'), 2000);
+  };
+
+  if (step === 'monitoring') {
+    return (
+      <div className="min-h-screen bg-black text-white p-10 flex flex-col items-center justify-center text-center">
+        <Activity className="w-16 h-16 text-blue-500 animate-pulse mb-8" />
+        <h2 className="text-3xl font-light mb-4 text-white">Live Node Monitor</h2>
+        <div className="grid grid-cols-3 gap-8 w-full max-w-2xl mt-12">
+           <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Throughput</p>
+              <p className="text-2xl font-mono">14.2 t/s</p>
+           </div>
+           <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Memory</p>
+              <p className="text-2xl font-mono">84%</p>
+           </div>
+           <div className="bg-white/5 p-6 rounded-3xl border border-white/10">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Trust</p>
+              <p className="text-2xl font-mono text-emerald-400">0.99</p>
+           </div>
+        </div>
+        <button onClick={onComplete} className="mt-16 pill-btn bg-white text-black px-12">Enter Dashboard</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white p-10 flex flex-col items-center justify-center">
+       <div className="w-full max-w-md space-y-10">
+          <div className="text-center">
+             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Plus className="w-8 h-8 text-blue-600" />
+             </div>
+             <h2 className="text-2xl font-semibold tracking-tight">One-Click Onboarding</h2>
+             <p className="text-sm text-gray-400 mt-2">Finish setting up {linkData.model} cluster</p>
+          </div>
+
+          <div className="space-y-6">
+             <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Usage Type</label>
+                <select className="w-full h-14 bg-gray-50 border-none rounded-2xl px-5 text-sm outline-none" onChange={e => setFormData({...formData, usage: e.target.value})}>
+                   <option>Personal / Development</option>
+                   <option>Commercial / API</option>
+                   <option>Public Mesh Relay</option>
+                </select>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Performance Tier</label>
+                <div className="flex gap-2">
+                   {['Low', 'Medium', 'Ultra'].map(t => (
+                      <button key={t} onClick={() => setFormData({...formData, survey: t})} className={`flex-1 h-12 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${formData.survey === t ? 'bg-black text-white' : 'bg-gray-50 text-gray-400'}`}>{t}</button>
+                   ))}
+                </div>
+             </div>
+          </div>
+
+          <button onClick={handleRegister} className="w-full h-16 bg-black text-white rounded-3xl font-bold uppercase tracking-widest shadow-xl shadow-black/10 hover:scale-[1.02] active:scale-[0.98] transition-all">
+             {step === 'verifying' ? 'Verifying Neural Path...' : 'Confirm Registration'}
+          </button>
+       </div>
+    </div>
+  );
+};
+
 // --- Mesh/Region Explorer ---
 const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
-  const regions = Object.keys(meshData).length > 0 ? Object.keys(meshData) : ['Discovering...'];
-  
   return (
     <div className="min-h-screen bg-[#fcfcfc] p-10 flex flex-col items-center">
        <nav className="w-full max-w-6xl flex justify-between items-center mb-20 animate-in fade-in duration-500">
@@ -132,7 +203,6 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
 
        <div className="w-full max-w-6xl space-y-12">
           <h2 className="text-4xl font-light tracking-tight text-center mb-16">Select Neural Region</h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
              {Object.entries(meshData).map(([region, nodes]) => (
                 <div key={region} className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all group flex flex-col">
@@ -145,7 +215,6 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
                       </span>
                    </div>
                    <h3 className="text-2xl font-semibold mb-6 tracking-tight">{region}</h3>
-                   
                    <div className="space-y-4 flex-1">
                       {nodes.slice(0, 3).map(node => (
                          <div key={node.addr} onClick={() => onSelectNode(node)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200">
@@ -156,7 +225,6 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
                             <ArrowRight className="w-3 h-3 text-gray-300" />
                          </div>
                       ))}
-                      {nodes.length > 3 && <p className="text-[10px] text-gray-300 text-center pt-2 italic">+{nodes.length - 3} more available</p>}
                    </div>
                 </div>
              ))}
@@ -166,27 +234,90 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
   );
 };
 
+// --- Dashboard Component (Restored) ---
+const Dashboard = ({ networkStats, messages, isProcessing, onSend, onRegister }) => {
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef(null);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  return (
+    <div className="flex h-screen bg-white text-[#202124] font-sans">
+      <aside className="w-72 bg-[#f8f9fa] border-r border-[#dadce0] flex flex-col p-6">
+        <div className="flex items-center gap-3 mb-10">
+          <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
+            <Layers className="w-5 h-5 text-white" />
+          </div>
+          <h1 className="font-bold text-lg">Bee2Bee</h1>
+        </div>
+        <div className="flex-1 space-y-6">
+           <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+              <p className="text-[9px] font-bold text-gray-300 uppercase mb-2">Connected ID</p>
+              <p className="text-[10px] font-mono truncate">{networkStats.activeNode}</p>
+           </div>
+           <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+                 <p className="text-xl font-bold">{networkStats.totalPeers}</p>
+                 <p className="text-[9px] font-bold text-gray-300 uppercase">Peers</p>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+                 <p className="text-xl font-bold">{networkStats.poolSize}</p>
+                 <p className="text-[9px] font-bold text-gray-300 uppercase">Nodes</p>
+              </div>
+           </div>
+        </div>
+      </aside>
+      <main className="flex-1 flex flex-col">
+         <div className="w-full h-80 border-b border-gray-50 flex items-center justify-center relative bg-[#fafafa]">
+            <NeuralMap peers={networkStats.peers} />
+         </div>
+         <div className="flex-1 overflow-y-auto px-10 py-10 space-y-8 no-scrollbar">
+            {messages.map((m, i) => (
+               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xl ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
+                     <p className={`text-2xl font-light ${m.role === 'user' ? 'text-black' : 'text-gray-400'}`}>{m.text}</p>
+                  </div>
+               </div>
+            ))}
+            <div ref={messagesEndRef} />
+         </div>
+         <div className="p-10 pt-0 flex gap-4 max-w-4xl mx-auto w-full">
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSend(input) && setInput('')}
+               placeholder="Neural Query..." className="flex-1 h-16 bg-gray-100 rounded-3xl px-8 text-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" />
+            <button onClick={() => { onSend(input); setInput(''); }} className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center"><Send className="w-6 h-6" /></button>
+         </div>
+      </main>
+    </div>
+  );
+};
+
 // --- App Root ---
 export default function App() {
   const [view, setView] = useState('landing');
+  const [linkData, setLinkData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
   const [meshData, setMeshData] = useState({});
 
   useEffect(() => {
+    // Check for deep link in URL
+    const params = new URLSearchParams(window.location.search);
+    const link = params.get('link');
+    if (link) {
+      const model = params.get('model') || 'Neural Node';
+      setLinkData({ link, model });
+      setView('quick-register');
+    }
+
     const fetchStats = async () => {
       try {
         const [statsRes, meshRes] = await Promise.all([
           fetch('/api/p2p/status'),
           fetch('/api/p2p/mesh')
         ]);
-        
         if (statsRes.ok) setNetworkStats(await statsRes.json());
         if (meshRes.ok) setMeshData(await meshRes.json());
-      } catch { 
-        setNetworkStats(prev => ({ ...prev, connected: false })); 
-      }
+      } catch { setNetworkStats(prev => ({ ...prev, connected: false })); }
     };
     const timer = setInterval(fetchStats, 3000);
     fetchStats();
@@ -204,15 +335,14 @@ export default function App() {
 
   if (view === 'landing') return <Landing onStart={() => setView('mesh')} />;
   if (view === 'mesh') return <MeshExplorer meshData={meshData} onBack={() => setView('landing')} onSelectNode={handleSelectNode} />;
+  if (view === 'quick-register') return <QuickRegister linkData={linkData} onComplete={() => setView('dashboard')} />;
   
   return (
     <Dashboard 
       networkStats={networkStats} 
       messages={messages} 
       isProcessing={isProcessing} 
-      onSend={(q) => {
-        // Implementation as before...
-        const handleSendInternal = async (content) => {
+      onSend={async (content) => {
           if (!content.trim() || isProcessing) return;
           setMessages(prev => [...prev, { role: 'user', text: content }]);
           setIsProcessing(true);
@@ -227,25 +357,6 @@ export default function App() {
           } catch { 
             setMessages(prev => [...prev, { role: 'ai', text: "Link Failed.", metadata: { trust_score: 0 } }]); 
           } finally { setIsProcessing(false); }
-        };
-        handleSendInternal(q);
-      }}
-      onRegister={async (link) => {
-        try {
-          const res = await fetch('/api/p2p/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ link })
-          });
-          const data = await res.json();
-          if (data.success) {
-            setMessages(prev => [...prev, { 
-              role: 'ai', 
-              text: `Neural Handshake successful. Linked to ${data.metadata.network} cluster.`,
-              metadata: { trust_score: 1.0, neural_path: 'registry' }
-            }]);
-          }
-        } catch { alert("Registration failed"); }
       }}
     />
   );

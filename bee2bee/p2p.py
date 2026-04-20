@@ -18,12 +18,12 @@ def generate_join_link(network: str, model: str, hash_hex: str, bootstrap: List[
     qs = f"network={network}&model={model}&hash={hash_hex}"
     if parts:
         qs = qs + "&" + "&".join(parts)
-    return f"p2pnet://join?{qs}"
+    return f"coithub.org://join?{qs}"
 
 
 def parse_join_link(link: str) -> Dict[str, Any]:
     u = urlparse(link)
-    if u.scheme != "p2pnet" or u.netloc != "join":
+    if u.scheme not in ["coithub", "coithub.org"] or u.netloc != "join":
         raise ValueError("invalid_link")
     qs = parse_qs(u.query)
     network = qs.get("network", [None])[0]

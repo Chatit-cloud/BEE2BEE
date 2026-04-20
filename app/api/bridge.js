@@ -153,22 +153,32 @@ class DynamicBee2BeeBridge {
              if (!this.activeWs) throw new Error('Neural Mesh Offline');
         }
 
+        // Logic to determine svc type based on metadata
+        let svcType = 'hf'; // default
+        this.peerMetadata.forEach(meta => {
+            if (meta.models && meta.models.includes(task.model)) {
+                if (meta.backend === 'ollama') svcType = 'ollama';
+                if (meta.backend === 'hf_remote') svcType = 'hf_remote';
+            }
+        });
+
         const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
         return new Promise((resolve, reject) => {
             this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
             setTimeout(() => {
                 if (this.pendingRequests.has(rid)) {
                     this.pendingRequests.delete(rid);
-                    reject(new Error('Swarm execution timeout'));
+                    reject(new Error('Neural Consensus Timeout (120s)'));
                 }
-            }, 60000);
+            }, 120000); // Increased to 120s for large models
 
+            console.log(`[Mesh] Dispatching ${rid} (model: ${task.model}, svc: ${svcType})`);
             this.activeWs.send(JSON.stringify({
                 type: 'gen_request',
                 rid,
                 prompt: task.prompt,
                 model: task.model || 'phi3',
-                svc: 'hf'
+                svc: svcType
             }));
         });
     }

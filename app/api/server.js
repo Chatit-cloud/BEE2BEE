@@ -9,6 +9,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Request logging for debugging 404/504
+app.use((req, res, next) => {
+    console.log(`[GW] ${req.method} ${req.url}`);
+    next();
+});
+
 // Initialize P2P connection
 bridge.connect();
 
@@ -73,6 +79,11 @@ app.post('/api/subscribe', (req, res) => {
     console.log(`📧 New mesh subscription: ${email}`);
     // In production, sync to Supabase 'subscribers' table if keys exist
     res.json({ success: true, message: 'Welcome to the mesh.' });
+});
+
+app.use((req, res) => {
+    console.error(`[GW] 404 Not Found: ${req.method} ${req.url}`);
+    res.status(404).json({ error: 'Route not found in Neural Gateway' });
 });
 
 const PORT = process.env.API_PORT || 3001;
