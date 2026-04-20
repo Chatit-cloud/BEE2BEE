@@ -1,6 +1,8 @@
 include README.md
 include LICENSE
 include pyproject.toml
+include requirements.txt
+include requirements-all.txt
 recursive-include bee2bee *.py
 recursive-include examples *.py
 recursive-include scripts *.py

@@ -8,11 +8,11 @@ version = "3.3.0"
 description = "Decentralized P2P network for AI model hosting and inference"
 authors = [{ name = "ConnectIT Team", email = "loaiabdalslam@gmail.com" }]
 readme = "README.md"
-license = "MIT"
 requires-python = ">=3.9"
 keywords = ["p2p", "ai", "machine-learning", "distributed", "inference", "transformers"]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -78,6 +78,7 @@ bee2bee = "bee2bee.__main__:cli"
 
 [tool.setuptools]
 packages = ["bee2bee"]
+license-files = []
 
 [tool.setuptools.package-data]
 bee2bee = ["*.json", "*.yaml", "*.yml"]

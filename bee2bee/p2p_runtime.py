@@ -773,7 +773,7 @@ async def run_p2p_node(
             console.print(f"[blue]Join Link:[/blue] {join_link}")
 
     # Initial sync
-    if node.supabase_url:
+    if node.registry.enabled:
         await node.sync_with_registry()
 
     # Keep alive with Heartbeat
