@@ -23,6 +23,9 @@ export class DynamicCoitHubBridge {
     async connect() {
         if (this.activeWs && this.activeWs.readyState === WebSocket.OPEN) return;
 
+        // Populate from registry first so we have metadata for nodes even before connecting
+        await this.syncGlobalMesh();
+
         // Priority: Connect to registered node first
         let nodeArray = [];
         if (this.registeredNode) {

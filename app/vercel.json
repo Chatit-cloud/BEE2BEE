@@ -1,16 +1,15 @@
 {
   "version": 2,
-  "name": "coithub-platform",
+  "name": "bee2bee-fusion-hub",
   "framework": "vite",
-  "builds": [
+  "rewrites": [
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
     },
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "functions": {
@@ -18,18 +17,7 @@
       "maxDuration": 300
     }
   },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "api/index.js"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
   "env": {
-    "VITE_SUPABASE_URL": "@supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key"
+    "VITE_API_MODE": "production"
   }
 }

@@ -132,7 +132,7 @@ const QuickRegister = ({ linkData, networkStats, onComplete }) => {
         let padded = nodeAddr;
         const missing = 4 - (nodeAddr.length % 4);
         if (missing !== 4) padded = nodeAddr + '='.repeat(missing);
-        decodedAddr = Buffer.from(padded, 'base64').toString();
+        decodedAddr = window.atob(padded);
       } catch (e) {
         console.error('Failed to decode bootstrap:', e);
       }
@@ -473,14 +473,27 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const link = params.get('link');
-    const modelParam = params.get('model');
+    let modelParam = params.get('model');
+    
     if (link) {
+      // Try to extract model from the nested link if not at top level
+      if (!modelParam) {
+        try {
+          const innerUrlStr = link.includes('://') ? link : `http://${link}`;
+          const innerUrl = new URL(innerUrlStr.replace('coithub.org://', 'http://coithub.org/'));
+          modelParam = innerUrl.searchParams.get('model');
+        } catch (e) {
+          console.warn("[App] Could not parse nested model info:", e);
+        }
+      }
+
       setLinkData({ link, model: modelParam || 'Neural Node' });
       if (modelParam) setSelectedModel(modelParam);
       setView('quick-register');
     }
+  }, []);
 
-    const fetchStats = async () => {
+  const fetchStats = async () => {
       try {
         const [statsRes, meshRes] = await Promise.all([
           fetch('/api/p2p/status'),
@@ -498,10 +511,17 @@ export default function App() {
         }
       } catch { setNetworkStats(prev => ({ ...prev, connected: false })); }
     };
-    const timer = setInterval(fetchStats, 3000);
+
+  useEffect(() => {
     fetchStats();
-    return () => clearInterval(timer);
-  }, [selectedModel]);
+    const interval = setInterval(fetchStats, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Immediate fetch when node is detected
+  useEffect(() => {
+    if (linkData) fetchStats();
+  }, [linkData]);
 
   const handleSelectNode = (node) => {
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);

@@ -147,11 +147,33 @@ class P2PNode:
     async def start(self):
         logger.info(f"Starting P2P Node on {self.host}:{self.port}")
         
+        async def _process_request(path, request_headers):
+            """Handle non-websocket requests (like OPTIONS preflight)."""
+            if "Origin" in request_headers:
+                # Basic CORS response for OPTIONS
+                if request_headers.get("Access-Control-Request-Method"):
+                    return (
+                        http.HTTPStatus.OK,
+                        [
+                            ("Access-Control-Allow-Origin", "*"),
+                            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+                            ("Access-Control-Allow-Headers", "*"),
+                            ("Access-Control-Max-Age", "86400"),
+                        ],
+                        b"",
+                    )
+            return None
+
         async def handler(ws: WebSocketServerProtocol):
             await self._handle_connection(ws)
 
+        import http
         try:
-            self.server = await websockets.serve(handler, self.host, self.port, max_size=32 * 1024 * 1024)
+            self.server = await websockets.serve(
+                handler, self.host, self.port, 
+                max_size=32 * 1024 * 1024,
+                process_request=_process_request
+            )
             self._running = True
             logger.success("WebSocket server started successfully")
         except Exception as e:
