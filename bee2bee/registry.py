@@ -39,7 +39,9 @@ class RegistryClient:
         address: str, 
         models: List[str], 
         latency: float = 0.0,
-        tag: str = "global"
+        tag: str = "global",
+        region: str = "Auto",
+        metrics: Optional[dict] = None
     ) -> bool:
         """Upsert node status to the global registry."""
         if not self.enabled:
@@ -50,7 +52,9 @@ class RegistryClient:
             "addr": address,
             "models": models,
             "latency_ms": latency,
-            "region": tag,
+            "region": region,
+            "tag": tag,
+            "metrics": metrics,
             "last_seen": datetime.now(timezone.utc).isoformat()
         }
         

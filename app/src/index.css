@@ -1,53 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;300;400;500&family=Space+Grotesk:wght@300;400&display=swap');
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @theme {
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: 'Space Grotesk', monospace;
-  
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-accent: var(--accent);
-  --color-border: var(--border);
+  --font-sans: 'Inter', sans-serif;
+  --color-primary: #000000;
+  --color-accent: #1a73e8;
+  --color-bg: #ffffff;
+  --color-border: #f1f3f4;
+  --color-text-muted: #5f6368;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --primary: #000000;
-  --accent: #f5f5f7;
-  --border: #e5e5e7;
+  background-color: var(--color-bg);
+  color: #202124;
+  font-family: var(--font-sans);
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  font-weight: 300;
+  margin: 0;
   -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.01em;
 }
 
-@layer base {
-  * {
-    border-color: var(--border);
-  }
+/* Custom Utilities */
+.google-sans-title {
+  @apply text-6xl md:text-8xl font-medium tracking-tighter leading-[1.1] text-black;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.sub-title {
+  @apply text-sm md:text-base text-gray-400 font-light tracking-tight max-w-2xl leading-relaxed;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+.pill-btn {
+  @apply h-14 px-10 rounded-full font-bold text-[10px] tracking-widest uppercase transition-all flex items-center justify-center;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e0e0e0;
-  border-radius: 10px;
+.bento-box {
+  @apply bg-white border border-[#f1f3f4] rounded-3xl p-6 transition-all hover:bg-gray-50/50;
 }
 
-::selection {
-  background: rgba(0, 0, 0, 0.05);
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Scrollbar hide */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -30,13 +30,14 @@ console = Console(**console_kwargs)
 
 
 class P2PNode:
-    def __init__(self, host: str = "0.0.0.0", port: int = 4001, announce_host: Optional[str] = None, announce_port: Optional[int] = None, entrypoint_url: Optional[str] = None):
+    def __init__(self, host: str = "0.0.0.0", port: int = 4001, announce_host: Optional[str] = None, announce_port: Optional[int] = None, entrypoint_url: Optional[str] = None, region: str = "Auto"):
         self.host = host
         self.port = port
         self.announce_host = announce_host
         self.announce_port = announce_port
         self.peer_id = new_id("peer")
         self.registry = RegistryClient(entrypoint_url=entrypoint_url)
+        self.region = region
         
         # We'll set self.addr after start() once we know the port
         self.addr = "" 
@@ -53,7 +54,7 @@ class P2PNode:
         self._running = False
         self._monitor_active = False
 
-    async def enable_monitoring(self, interval_seconds: int = 3600):
+    async def enable_monitoring(self, interval_seconds: int = 300):
         """Enable the supervisor monitoring loop."""
         if self._monitor_active:
             return
@@ -76,6 +77,9 @@ class P2PNode:
         if not self.addr or not self.registry.enabled:
             return
         
+        from .utils import get_system_metrics
+        metrics = get_system_metrics()
+        
         models = []
         for svc in self.local_services.values():
             meta = svc.get_metadata()
@@ -89,7 +93,9 @@ class P2PNode:
             peer_id=self.peer_id,
             address=self.addr,
             models=list(set(models)),
-            tag="pypi-production"
+            tag="pypi-production",
+            region=self.region,
+            metrics=metrics
         )
 
     async def _run_health_checks(self):
@@ -119,7 +125,7 @@ class P2PNode:
                 # Send ping with metrics
                 await self._send(ws, {
                     "type": "ping", 
-                    "timestamp": t0,
+                    "ts": t0, # Note: using 'ts' as expected by pong handler
                     "metrics": local_metrics
                 })
                 
@@ -399,6 +405,7 @@ class P2PNode:
     # --- Protocol Handling ---
 
     def _make_hello_msg(self) -> Dict[str, Any]:
+        from .utils import get_system_metrics
         services_meta = {
             name: svc.get_metadata() 
             for name, svc in self.local_services.items()
@@ -407,6 +414,8 @@ class P2PNode:
             "type": "hello",
             "peer_id": self.peer_id,
             "addr": self.addr,
+            "region": self.region,
+            "metrics": get_system_metrics(),
             "services": services_meta
         }
 
@@ -716,15 +725,16 @@ async def run_p2p_node(
     announce_host: str = None, 
     backend: str = "hf",
     api_port: int = None,
-    entrypoint_url: str = None
+    entrypoint_url: str = None,
+    region: str = "Auto"
 ):
     """Entry point for running a peer node with one or more models."""
     from .p2p import generate_join_link
     
     console.print(f"\n[bold cyan]🚀 Starting P2P Node[/bold cyan]")
-    console.print(f"[dim]Host: {host or '0.0.0.0'}, Port: {port or 0}, Announce: {announce_host}[/dim]")
+    console.print(f"[dim]Host: {host or '0.0.0.0'}, Port: {port or 0}, Region: {region}[/dim]")
     
-    node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host, entrypoint_url=entrypoint_url)
+    node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host, entrypoint_url=entrypoint_url, region=region)
     await node.start()
     
     # Start API if requested
@@ -802,3 +812,29 @@ async def run_p2p_node(
     except KeyboardInterrupt:
         console.print(f"\n[yellow]👋 Received interrupt, stopping...[/yellow]")
         await node.stop()
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Bee2Bee P2P Runtime Engine")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host")
+    parser.add_argument("--port", type=int, default=4001, help="Bind port")
+    parser.add_argument("--register", action="store_true", help="Register as a service provider")
+    parser.add_argument("--model", default="phi3", help="Model name to serve")
+    parser.add_argument("--provider", default="hf", help="Inference backend (hf, ollama, hf_remote)")
+    parser.add_argument("--endpoint", default=None, help="Backend endpoint URL (e.g. for Ollama)")
+    parser.add_argument("--tag", default="Core-Node", help="Node tag/region")
+    parser.add_argument("--bootstrap", default=None, help="Bootstrap node link")
+    
+    args = parser.parse_args()
+
+    if args.endpoint and args.provider == "ollama":
+        os.environ["OLLAMA_HOST"] = args.endpoint
+
+    asyncio.run(run_p2p_node(
+        host=args.host,
+        port=args.port,
+        model_name=args.model if args.register else None,
+        backend=args.provider,
+        bootstrap_link=args.bootstrap,
+        announce_host=args.host
+    ))

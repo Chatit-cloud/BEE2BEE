@@ -1,20 +1,10 @@
 {
   "version": 2,
   "name": "bee2bee-fusion-hub",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
+  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/v1/:path*",
+      "source": "/api/(.*)",
       "destination": "/api/index.js"
     },
     {
