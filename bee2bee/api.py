@@ -166,17 +166,28 @@ async def chat(req: ChatRequest):
     try:
         # Execute locally on this node directly (not via P2P)
         if node.local_services:
+            logger.debug(f"Local services available: {list(node.local_services.keys())}")
             for svc_name, svc in node.local_services.items():
                 svc_meta = svc.get_metadata()
                 models = svc_meta.get("models", [])
                 
-                # Check if this service has the requested model
-                if req.model and req.model not in models:
-                    continue
-                if not req.model and not models:
+                # Check if this service has the requested model (supporting partial match)
+                has_model = False
+                if not req.model:
+                    has_model = True
+                else:
+                    # Exact or partial match (e.g. gemma4:31b-cloud matches gemma4)
+                    for m in models:
+                        if req.model == m or req.model in m or m in req.model:
+                            has_model = True
+                            break
+                
+                if not has_model:
+                    logger.debug(f"Service {svc_name} does not support model {req.model} (supported: {models})")
                     continue
                     
                 # Execute locally
+                logger.info(f"Local execution trigger: {svc_name} for model {req.model or 'default'}")
                 result = svc.execute({
                     "prompt": req.prompt,
                     "max_new_tokens": req.max_new_tokens or 2048,

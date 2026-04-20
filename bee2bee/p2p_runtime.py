@@ -728,6 +728,35 @@ class P2PNode:
         return None  # Should not happen
 
     async def request_generation(self, provider_id: str, prompt: str, max_new_tokens: int = 32, model_name: Optional[str] = None):
+        # SELF-REQUEST HANDLING: If requesting from self, execute directly via local service
+        if provider_id == self.peer_id or provider_id == "local":
+            if self.local_services:
+                # Find best service for this model
+                target_svc = None
+                for name, svc in self.local_services.items():
+                    if not model_name:
+                        target_svc = svc
+                        break
+                    if model_name in svc.get_metadata().get("models", []):
+                        target_svc = svc
+                        break
+                
+                if not target_svc and self.local_services:
+                    target_svc = list(self.local_services.values())[0] # Fallback to first
+                
+                if target_svc:
+                    logger.info(f"Self-executing request via {target_svc.name}")
+                    return target_svc.execute({
+                        "prompt": prompt,
+                        "max_new_tokens": max_new_tokens,
+                        "temperature": 0.7
+                    })
+            
+            # If we reached here, no local service found
+            if provider_id == self.peer_id:
+                logger.error(f"Self-request failed: No local services providing model {model_name}")
+                raise RuntimeError("no_local_service")
+
         info = self.peers.get(provider_id)
         if not info:
             logger.error(f"Provider {provider_id} not connected")

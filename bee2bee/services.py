@@ -105,20 +105,29 @@ class OllamaService(BaseService):
             
             # Check if model exists
             models = [m["name"] for m in res.json().get("models", [])]
+            self.actual_model = self.model_name
             # Simple substring check because ollama models have tags like 'llama3:latest'
-            if not any(self.model_name in m for m in models):
+            found = False
+            for m in models:
+                if self.model_name == m or self.model_name in m or m in self.model_name:
+                    self.actual_model = m
+                    found = True
+                    break
+            
+            if not found:
                  # Try pull? For now just warn or error.
                  console.log(f"[yellow]⚠️ Model '{self.model_name}' not found in Ollama '{self.host}'.[/yellow]")
                  console.log(f"[dim]Available: {models}[/dim]")
+                 # Fallback to first model if list is small? No, stay on model_name but warn
             else:
-                 console.log(f"[green]✓ Ollama Model '{self.model_name}' ready[/green]")
+                 console.log(f"[green]✓ Ollama Model '{self.model_name}' ready (mapped to {self.actual_model})[/green]")
                  
         except Exception as e:
             raise ServiceError(f"Ollama connection failed: {e}")
 
     def get_metadata(self) -> Dict[str, Any]:
         return {
-            "models": [self.model_name],
+            "models": [self.model_name, getattr(self, 'actual_model', self.model_name)],
             "price_per_token": self.price_per_token,
             "backend": "ollama"
         }
@@ -134,9 +143,11 @@ class OllamaService(BaseService):
             
         try:
             t0 = time.time()
+            # Use actual_model for the real request to Ollama
+            target_model = getattr(self, 'actual_model', self.model_name)
             # Non-streaming implementation for now
             payload = {
-                "model": self.model_name,
+                "model": target_model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
