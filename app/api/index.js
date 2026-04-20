@@ -23,7 +23,7 @@ app.post('/api/generate', async (req, res) => {
             rid: result.rid,
             metadata: result.metadata || {
                 trust_score: 0.999,
-                engine: 'bee2bee-core'
+                engine: 'coithub-core'
             }
         });
     } catch (e) {
@@ -45,7 +45,7 @@ app.post('/api/p2p/consensus', async (req, res) => {
             metadata: {
                 trust_score: 0.999,
                 neural_path: 'direct-swarm-link',
-                engine: 'bee2bee-core',
+                engine: 'coithub-core',
                 mode: 'serverless'
             }
         });

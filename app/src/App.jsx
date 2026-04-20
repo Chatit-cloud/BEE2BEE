@@ -64,7 +64,7 @@ const Landing = ({ onStart }) => {
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 relative overflow-hidden">
       <div className="mb-12 flex items-center gap-2 py-2 px-4 rounded-full border border-gray-100 bg-white shadow-sm ring-1 ring-black/5 animate-float">
         <Layers className="w-3.5 h-3.5 text-black" />
-        <span className="text-[11px] font-bold tracking-tight text-black">CohitHub.org</span>
+        <span className="text-[11px] font-bold tracking-tight text-black">CoitHub.org</span>
       </div>
       <div className="text-center space-y-10 max-w-4xl mx-auto z-10">
         <h1 className="google-sans-title">Neural<br />Autonomous Cluster</h1>
@@ -125,39 +125,59 @@ const QuickRegister = ({ linkData, networkStats, onComplete }) => {
     if (step !== 'monitoring') return;
     
     const nodeAddr = linkData.link.split('bootstrap=')[1]?.split('&')[0];
-    const decodedAddr = nodeAddr ? atob(nodeAddr) : null;
+    // Handle URL-safe base64 with stripped padding
+    let decodedAddr = null;
+    if (nodeAddr) {
+      try {
+        let padded = nodeAddr;
+        const missing = 4 - (nodeAddr.length % 4);
+        if (missing !== 4) padded = nodeAddr + '='.repeat(missing);
+        decodedAddr = Buffer.from(padded, 'base64').toString();
+      } catch (e) {
+        console.error('Failed to decode bootstrap:', e);
+      }
+    }
 
     const findMetrics = () => {
-       const peer = (networkStats.peers || []).find(p => p.addr === decodedAddr) || 
-                    (networkStats.peers || [])[0]; // fallback to first peer for demo if direct match fails
+       // Try to find by decoded address or use first peer
+       const peer = (networkStats.peers || []).find(p => p.addr === decodedAddr || (decodedAddr && p.addr?.includes(decodedAddr.split(':')[0]))) || 
+                    (networkStats.peers || [])[0];
        
-       if (peer && peer.metrics) {
+       if (peer) {
           setLiveMetrics({
-             tps: peer.metrics.throughput || 12.8,
-             mem: peer.metrics.memory_percent || 45,
-             trust: peer.metrics.trust_score || 0.99,
+             tps: peer.metrics?.throughput || 0,
+             mem: peer.metrics?.memory_percent || 0,
+             trust: peer.metrics?.trust_score || 0.99,
              status: 'live'
           });
        }
     };
     
     const interval = setInterval(findMetrics, 2000);
+    findMetrics(); // Initial call
     return () => clearInterval(interval);
-  }, [step, networkStats.peers]);
+  }, [step, networkStats.peers, linkData.link]);
 
   const handleRegister = async () => {
     setStep('verifying');
     try {
-      await fetch('/api/p2p/register', {
+      const res = await fetch('/api/p2p/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: linkData.link })
       });
-      // Allow time for P2P handshake
-      setTimeout(() => setStep('monitoring'), 1500);
+      const result = await res.json();
+      
+      if (result.success) {
+        // Wait for P2P handshake with longer timeout
+        setTimeout(() => setStep('monitoring'), 2000);
+      } else {
+        console.error('Registration failed:', result.error);
+        setStep('form');
+      }
     } catch (e) {
       console.error('Registration failed:', e);
-      setStep('form'); // Rollback on error
+      setStep('form');
     }
   };
 
@@ -244,7 +264,7 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
              <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
                 <Globe className="w-4 h-4 text-white" />
              </div>
-             <span className="text-sm font-bold tracking-tight">Bee2Bee Mesh</span>
+             <span className="text-sm font-bold tracking-tight">CoitHub Mesh</span>
           </div>
           <button onClick={onBack} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black">Exit</button>
        </nav>
@@ -305,7 +325,7 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shrink-0">
              <Layers className="w-4 h-4 text-white" />
           </div>
-          <h1 className="font-bold text-sm hidden md:block tracking-tight text-black">Bee2Bee</h1>
+          <h1 className="font-bold text-sm hidden md:block tracking-tight text-black">CoitHub</h1>
         </div>
         
         <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
@@ -368,7 +388,7 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
             <div className="max-w-3xl mx-auto px-6 space-y-12">
                {messages.length === 0 && (
                   <div className="py-20 text-center space-y-4 animate-in fade-in duration-1000">
-                     <h2 className="text-4xl md:text-5xl font-light tracking-tight text-gray-200">How can Bee2Bee help you?</h2>
+                     <h2 className="text-4xl md:text-5xl font-light tracking-tight text-gray-200">How can CoitHub help you?</h2>
                      <p className="text-xs text-gray-300 font-medium uppercase tracking-[0.2em]">Decentralized Neural Cluster — Private & Permissionless</p>
                   </div>
                )}
@@ -420,7 +440,7 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
                         value={input} 
                         onChange={e => setInput(e.target.value)} 
                         onKeyDown={e => e.key === 'Enter' && handleCommit()}
-                        placeholder="Message Bee2Bee..." 
+                        placeholder="Message CoitHub..." 
                         className="flex-1 h-12 bg-transparent text-[15px] text-black placeholder:text-gray-400 outline-none" 
                      />
                      <button 
@@ -431,7 +451,7 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
                         <Send className="w-5 h-5" />
                      </button>
                   </div>
-                  <p className="text-[9px] text-center text-gray-300 mt-4 font-bold uppercase tracking-widest">Bee2Bee may hallucinate. Verify critical outputs.</p>
+                  <p className="text-[9px] text-center text-gray-300 mt-4 font-bold uppercase tracking-widest">CoitHub may hallucinate. Verify critical outputs.</p>
                </div>
             </div>
          </div>
@@ -503,7 +523,7 @@ export default function App() {
       messages={messages} 
       isProcessing={isProcessing} 
       activeModel={selectedModel}
-      onSend={async (content) => {
+onSend={async (content) => {
           if (!content.trim() || isProcessing) return;
           setMessages(prev => [...prev, { role: 'user', text: content }]);
           setIsProcessing(true);
@@ -515,37 +535,53 @@ export default function App() {
               body: JSON.stringify(payload)
             });
 
-            // If status is 504 and we are likely hitting a local node from a remote gateway
-            if (response.status === 504) {
+            if (response.status === 504 || response.status === 503) {
                console.warn("[Mesh] Cloud Bridge timeout. Attempting Neural Direct-Link...");
-               // Attempt local ingress fallback
-               try {
-                   const localResp = await fetch('http://localhost:8000/chat', {
-                       method: 'POST',
-                       headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({ prompt: content, model: selectedModel })
-                   });
-                   if (localResp.ok) {
-                       const localData = await localResp.json();
-                       setMessages(prev => [...prev, { 
-                           role: 'ai', 
-                           text: localData.text || "Direct Link Success.", 
-                           metadata: { ...localData.metadata, mode: 'direct-ingress' } 
-                       }]);
-                       return;
+               
+               // Try direct local node at common ports
+               const ports = [8000, 4001, 3000];
+               let directSuccess = false;
+               
+               for (const port of ports) {
+                   try {
+                       const localResp = await fetch(`http://localhost:${port}/chat`, {
+                           method: 'POST',
+                           headers: { 'Content-Type': 'application/json' },
+                           body: JSON.stringify({ 
+                               prompt: content, 
+                               model: selectedModel,
+                               max_new_tokens: 2048
+                           })
+                       });
+                       if (localResp.ok) {
+                           const localData = await localResp.json();
+                           setMessages(prev => [...prev, { 
+                               role: 'ai', 
+                               text: localData.text || "Direct Link Success.", 
+                               metadata: { ...localData.metadata, mode: 'direct-ingress', port } 
+                           }]);
+                           directSuccess = true;
+                           break;
+                       }
+                   } catch (localErr) {
+                       console.log(`[Mesh] Port ${port} failed:`, localErr.message);
                    }
-               } catch (localErr) {
-                   console.error("[Mesh] Direct-Link failed:", localErr);
                }
                
-               setMessages(prev => [...prev, { role: 'ai', text: `Consensus Timeout (300s). The node at your address is unreachable or loading ${selectedModel}.`, metadata: { error: true } }]);
+               if (directSuccess) return;
+               
+               setMessages(prev => [...prev, { 
+                   role: 'ai', 
+                   text: `No nodes available. Make sure your node is running:\npython -m bee2bee serve-ollama --model ${selectedModel}`, 
+                   metadata: { error: true } 
+               }]);
             } else {
-               const data = await response.json();
-               setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (No Response).", metadata: data.metadata }]);
+                const data = await response.json();
+                setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (No Response).", metadata: data.metadata }]);
             }
           } catch (err) { 
             console.error("[Mesh] Request failed:", err);
-            setMessages(prev => [...prev, { role: 'ai', text: "Bridge Offline.", metadata: { trust_score: 0 } }]); 
+            setMessages(prev => [...prev, { role: 'ai', text: "Bridge Offline. Is your node running?", metadata: { trust_score: 0 } }]); 
           } finally { setIsProcessing(false); }
       }}
     />

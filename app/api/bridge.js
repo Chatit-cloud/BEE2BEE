@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 
 dotenv.config();
 
-export class DynamicBee2BeeBridge {
+export class DynamicCoitHubBridge {
     constructor(seedNodes = []) {
         this.nodes = new Set(seedNodes);
         this.activeWs = null;
@@ -13,6 +13,7 @@ export class DynamicBee2BeeBridge {
         this.pendingRequests = new Map();
         this.peerMetadata = new Map();
         this.stats = { uptime: Date.now(), totalPeers: 0, activeNode: null };
+        this.registeredNode = null; // Priority node from join link
         
         // Start autonomous discovery
         this.connect();
@@ -20,30 +21,61 @@ export class DynamicBee2BeeBridge {
     }
 
     async connect() {
-        if (this.activeWs) return;
+        if (this.activeWs && this.activeWs.readyState === WebSocket.OPEN) return;
 
-        // Try global discovery first
-        await this.syncGlobalMesh();
+        // Priority: Connect to registered node first
+        let nodeArray = [];
+        if (this.registeredNode) {
+            nodeArray = [this.registeredNode, ...Array.from(this.nodes)];
+        } else {
+            nodeArray = Array.from(this.nodes);
+        }
 
-        const nodeArray = Array.from(this.nodes);
         if (nodeArray.length === 0) {
             console.log('\x1b[33m%s\x1b[0m', '[Mesh] Neural Network Search Active... (No nodes yet)');
             return;
         }
 
-        // Round-robin / Random selection
-        this.activeUrl = nodeArray[Math.floor(Math.random() * nodeArray.length)];
-        
-        try {
-            console.log(`[Mesh] Connecting to Swarm Node: ${this.activeUrl}`);
-            this.activeWs = new WebSocket(this.activeUrl);
-            this._setupHandlers();
-        } catch (e) {
-            console.error(`[Mesh] Node Unreachable: ${this.activeUrl}`);
-            this.nodes.delete(this.activeUrl);
-            this.activeWs = null;
-            setTimeout(() => this.connect(), 2000);
+        // Remove duplicates
+        nodeArray = [...new Set(nodeArray)];
+
+        // Try each node until one connects
+        for (const nodeUrl of nodeArray) {
+            try {
+                console.log(`[Mesh] Attempting connection to: ${nodeUrl}`);
+                this.activeUrl = nodeUrl;
+                this.activeWs = new WebSocket(nodeUrl);
+                
+                // Wait for open with timeout
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Connection timeout')), 5000);
+                    this.activeWs.on('open', () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                    this.activeWs.on('error', (e) => {
+                        clearTimeout(timeout);
+                        reject(e);
+                    });
+                });
+                
+                this._setupHandlers();
+                console.log(`[Mesh] ✅ Connected to: ${this.activeUrl}`);
+                this.stats.activeNode = this.activeUrl;
+                return;
+            } catch (e) {
+                console.error(`[Mesh] Failed to connect to ${nodeUrl}:`, e.message);
+                this.nodes.delete(nodeUrl);
+                if (this.registeredNode === nodeUrl) {
+                    this.registeredNode = null; // Remove failed registered node
+                }
+                this.activeWs = null;
+                this.activeUrl = null;
+            }
         }
+
+        // All nodes failed, retry after delay
+        setTimeout(() => this.connect(), 5000);
     }
 
     async syncGlobalMesh() {
@@ -273,9 +305,19 @@ export class DynamicBee2BeeBridge {
             let bootstrapUrl = Buffer.from(padded, 'base64').toString();
             if (!bootstrapUrl.includes('://')) bootstrapUrl = `ws://${bootstrapUrl}`;
             console.log(`[Bridge] Registering node: ${bootstrapUrl}`);
+            
+            // Set as priority node
+            this.registeredNode = bootstrapUrl;
             this.nodes.add(bootstrapUrl);
-            this.connect();
-            return { success: true, node: bootstrapUrl };
+            
+            // Force reconnect to the registered node
+            if (this.activeWs) {
+                this.activeWs.close();
+                this.activeWs = null;
+            }
+            
+            await this.connect();
+            return { success: true, node: bootstrapUrl, connected: !!this.activeWs };
         } catch (e) {
             console.error('[Bridge] Register failed:', e);
             return { success: false, error: e.message };
@@ -284,4 +326,4 @@ export class DynamicBee2BeeBridge {
 }
 
 const seeds = process.env.BEE2BEE_SEEDS ? process.env.BEE2BEE_SEEDS.split(',') : ['ws://127.0.0.1:4001'];
-export const bridge = new DynamicBee2BeeBridge(seeds);
+export const bridge = new DynamicCoitHubBridge(seeds);

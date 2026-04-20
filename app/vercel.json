@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "name": "bee2bee-platform",
+  "name": "coithub-platform",
   "framework": "vite",
   "builds": [
     {

@@ -19,7 +19,7 @@ app.use((req, res, next) => {
 bridge.connect();
 
 /**
- * Bee2Bee API Gateway
+ * CoitHub API Gateway
  */
 
 // Direct Generate with custom options (no max token limit)
@@ -39,7 +39,7 @@ app.post('/api/generate', async (req, res) => {
             rid: result.rid,
             metadata: result.metadata || {
                 trust_score: 0.999,
-                engine: 'bee2bee-core'
+                engine: 'coithub-core'
             }
         });
     } catch (e) {
@@ -55,19 +55,31 @@ app.post('/api/p2p/consensus', async (req, res) => {
         return res.status(400).json({ error: 'Task prompt is required' });
     }
 
+    const stats = bridge.getStats();
+    if (!stats.connected) {
+        return res.status(503).json({ error: 'No nodes connected. Register a node first or ensure node is running.' });
+    }
+
     try {
+        console.log(`[API] Consensus request for model: ${task.model || 'default'}`);
         const result = await bridge.request(task);
+        
+        if (!result.text) {
+            return res.status(502).json({ error: 'Empty response from node' });
+        }
+        
         res.json({
             text: result.text,
             rid: result.rid,
             metadata: {
                 trust_score: 0.999,
                 neural_path: 'direct-swarm-link',
-                engine: 'bee2bee-core'
+                engine: 'coithub-core',
+                node: stats.activeNode
             }
         });
     } catch (e) {
-        console.error('API Error:', e.message);
+        console.error('[API] Consensus Error:', e.message);
         res.status(504).json({ error: e.message });
     }
 });
@@ -83,6 +95,14 @@ app.post('/api/p2p/register', (req, res) => {
     const { link } = req.body;
     if (!link) return res.status(400).json({ error: 'Missing join link' });
     const result = bridge.registerJoinLink(link);
+    
+    // Wait a moment and check connection
+    setTimeout(() => {
+        const stats = bridge.getStats();
+        result.connected = stats.connected;
+        result.activeNode = stats.activeNode;
+    }, 1000);
+    
     res.json(result);
 });
 
@@ -114,5 +134,5 @@ app.use((req, res) => {
 
 const PORT = process.env.API_PORT || 3001;
 app.listen(PORT, () => {
-    console.log(`\x1b[35m🛰️  Bee2Bee API Gateway active on port ${PORT}\x1b[0m`);
+    console.log(`\x1b[35m🛰️  CoitHub API Gateway active on port ${PORT}\x1b[0m`);
 });

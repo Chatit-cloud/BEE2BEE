@@ -1,9 +1,9 @@
 /**
- * Bee2Bee Neural Consensus Client
+ * CoitHub Neural Consensus Client
  * High-level Javascript interface for the decentralized P2P network.
  */
 
-class Bee2BeeAPI {
+class CoitHubAPI {
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl;
   }
@@ -83,5 +83,5 @@ class Bee2BeeAPI {
   }
 }
 
-export const b2b = new Bee2BeeAPI();
-export default b2b;
+export const coithub = new CoitHubAPI();
+export default coithub;
