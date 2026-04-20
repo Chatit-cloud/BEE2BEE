@@ -54,7 +54,7 @@ class P2PNode:
         self._running = False
         self._monitor_active = False
 
-    async def enable_monitoring(self, interval_seconds: int = 300):
+    async def enable_monitoring(self, interval_seconds: int = 30):
         """Enable the supervisor monitoring loop."""
         if self._monitor_active:
             return
@@ -801,8 +801,9 @@ async def run_p2p_node(
             console.print(f"[cyan]Model:[/cyan] {model_name} ({backend})")
             console.print(f"[blue]Deep Link:[/blue] {join_link}")
 
-    # Initial sync
+    # Initial sync and start autonomous monitoring
     if node.registry.enabled:
+        await node.enable_monitoring()
         await node.sync_with_registry()
 
     # Keep alive with Heartbeat

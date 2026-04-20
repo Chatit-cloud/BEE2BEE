@@ -1,101 +1,110 @@
-import { WebSocket } from 'ws';
+import WebSocket from 'ws';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
+import fetch from 'node-fetch';
 
-/**
- * Dynamic Neural Mesh Bridge
- * Maintains a resilient connection to the Bee2Bee P2P network
- * with auto-failover and peer discovery.
- */
-class DynamicBee2BeeBridge {
-    constructor(seeds = ['ws://127.0.0.1:4001']) {
-        this.seeds = seeds;
-        this.nodes = new Set(seeds);
+dotenv.config();
+
+export class DynamicBee2BeeBridge {
+    constructor(seedNodes = []) {
+        this.nodes = new Set(seedNodes);
         this.activeWs = null;
         this.activeUrl = null;
         this.pendingRequests = new Map();
-        this.isConnecting = false;
-        this.peerMetadata = new Map(); // Store detailed info for the globe
-        this.stats = {
-            totalPeers: 0,
-            activeNode: null,
-            latency: 0,
-            uptime: Date.now()
-        };
+        this.peerMetadata = new Map();
+        this.stats = { uptime: Date.now(), totalPeers: 0, activeNode: null };
+        
+        // Start autonomous discovery
+        this.connect();
+        setInterval(() => this.syncGlobalMesh(), 30000);
     }
 
     async connect() {
-        if (this.activeWs || this.isConnecting) return;
-        this.isConnecting = true;
+        if (this.activeWs) return;
+
+        // Try global discovery first
+        await this.syncGlobalMesh();
 
         const nodeArray = Array.from(this.nodes);
-        for (const url of nodeArray) {
-            try {
-                const ws = await this._tryConnect(url);
-                if (ws) {
-                    this.activeWs = ws;
-                    this.activeUrl = url;
-                    this.stats.activeNode = url;
-                    this.isConnecting = false;
-                    this._setupHandlers();
-                    console.log(`✅ [Mesh] Neural link established with ${url}`);
-                    return;
-                }
-            } catch (e) { }
+        if (nodeArray.length === 0) {
+            console.log('\x1b[33m%s\x1b[0m', '[Mesh] Neural Network Search Active... (No nodes yet)');
+            return;
         }
 
-        this.isConnecting = false;
-        setTimeout(() => this.connect(), 5000);
+        // Round-robin / Random selection
+        this.activeUrl = nodeArray[Math.floor(Math.random() * nodeArray.length)];
+        
+        try {
+            console.log(`[Mesh] Connecting to Swarm Node: ${this.activeUrl}`);
+            this.activeWs = new WebSocket(this.activeUrl);
+            this._setupHandlers();
+        } catch (e) {
+            console.error(`[Mesh] Node Unreachable: ${this.activeUrl}`);
+            this.nodes.delete(this.activeUrl);
+            this.activeWs = null;
+            setTimeout(() => this.connect(), 2000);
+        }
     }
 
-    _tryConnect(url) {
-        return new Promise((resolve) => {
-            const ws = new WebSocket(url, { handshakeTimeout: 3000 });
-            let resolved = false;
+    async syncGlobalMesh() {
+        const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        
+        if (!sbUrl || !sbKey) return;
 
-            ws.on('open', () => {
-                if (!resolved) {
-                    resolved = true;
-                    ws.send(JSON.stringify({
-                        type: 'hello',
-                        peer_id: `gateway-${crypto.randomBytes(4).toString('hex')}`,
-                        services: { 'gateway': true }
-                    }));
-                    resolve(ws);
-                }
+        try {
+            const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?select=*&order=last_seen.desc&limit=20`, {
+                headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` }
             });
-
-            ws.on('error', () => { if (!resolved) { resolved = true; resolve(null); } ws.close(); });
-            ws.on('close', () => { if (!resolved) { resolved = true; resolve(null); } });
-            setTimeout(() => { if (!resolved) { resolved = true; ws.close(); resolve(null); } }, 3500);
-        });
+            if (resp.ok) {
+                const nodes = await resp.json();
+                nodes.forEach(node => {
+                    if (node.addr) {
+                        this.nodes.add(node.addr);
+                        this._updatePeerMetadata(node.addr, {
+                            peer_id: node.peer_id,
+                            region: node.region,
+                            models: node.models,
+                            metrics: node.metrics,
+                            backend: node.metrics?.backend
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Mesh] Registry Sync Error:', e.message);
+        }
     }
 
     _setupHandlers() {
+        if (!this.activeWs) return;
+
+        this.activeWs.on('open', () => {
+            console.log('\x1b[32m%s\x1b[0m', `[Mesh] Swarm Tunnel Established -> ${this.activeUrl}`);
+            this.stats.activeNode = this.activeUrl;
+        });
+
         this.activeWs.on('message', (data) => {
             try {
-                const msg = JSON.parse(data);
+                const msg = JSON.parse(data.toString());
                 
-                if (msg.type === 'gen_result' && this.pendingRequests.has(msg.rid)) {
+                if (msg.type === 'peer_discovery' && msg.peers) {
+                    msg.peers.forEach(p => {
+                        this.nodes.add(p.addr);
+                        this._updatePeerMetadata(p.addr, p);
+                    });
+                }
+
+                if (msg.type === 'gen_response' && this.pendingRequests.has(msg.rid)) {
                     const { resolve } = this.pendingRequests.get(msg.rid);
                     this.pendingRequests.delete(msg.rid);
-                    resolve(msg);
-                }
-
-                if (msg.type === 'hello') {
-                    // Update metadata for this node
-                    this._updatePeerMetadata(msg.addr || this.activeUrl, msg);
-                }
-
-                if (msg.type === 'peer_list') {
-                    const newPeers = msg.peers || [];
-                    this.stats.totalPeers = newPeers.length;
-                    
-                    newPeers.forEach(p => {
-                        const addr = typeof p === 'string' ? p : p.addr;
-                        if (addr && !addr.startsWith('gateway')) {
-                             const wsAddr = addr.includes('://') ? addr : `ws://${addr}`;
-                             this.nodes.add(wsAddr);
-                             this._updatePeerMetadata(wsAddr, p);
+                    resolve({
+                        text: msg.text,
+                        rid: msg.rid,
+                        metadata: { 
+                            trust_score: msg.trust_score || 0.99,
+                            latency: Date.now() - (this.pendingRequests.get(msg.rid)?.ts || Date.now()),
+                            backend: msg.backend
                         }
                     });
                 }
@@ -103,7 +112,6 @@ class DynamicBee2BeeBridge {
                 if (msg.type === 'ping') {
                     this.activeWs.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
                 }
-
             } catch (e) { console.error('[Mesh] Protocol Error:', e); }
         });
 
@@ -111,14 +119,12 @@ class DynamicBee2BeeBridge {
             this.activeWs = null;
             this.activeUrl = null;
             this.stats.activeNode = null;
-            this.connect();
+            setTimeout(() => this.connect(), 5000);
         });
     }
 
     _updatePeerMetadata(addr, msg) {
         if (!addr) return;
-        const host = addr.split('://')[1]?.split(':')[0] || '127.0.0.1';
-        
         const existing = this.peerMetadata.get(addr) || {};
         this.peerMetadata.set(addr, {
             ...existing,
@@ -126,106 +132,111 @@ class DynamicBee2BeeBridge {
             addr: addr,
             region: msg.region || existing.region || 'Auto',
             metrics: msg.metrics || existing.metrics || {},
-            models: msg.services ? Object.values(msg.services).flatMap(s => s.models || []) : (msg.models || existing.models || []),
+            models: msg.models || (msg.services ? Object.values(msg.services).flatMap(s => s.models || []) : []),
+            backend: msg.backend || msg.metrics?.backend || existing.backend,
             status: 'active',
             last_seen: Date.now(),
-            // Stable location based on hash of address if not provided
             location: existing.location || [Math.random() * 120 - 60, Math.random() * 360 - 180]
         });
     }
 
     getRegionalMesh() {
         const mesh = {};
-        this.peerMetadata.forEach((meta, addr) => {
+        this.peerMetadata.forEach((meta) => {
             const region = meta.region || 'Global';
             if (!mesh[region]) mesh[region] = [];
-            mesh[region].push({
-                ...meta,
-                latency: Math.floor(Math.random() * 50) + 10 // Mock latency for display
-            });
+            mesh[region].push({ ...meta, latency: Math.floor(Math.random() * 50) + 10 });
         });
         return mesh;
     }
 
     async request(task) {
-        if (!this.activeWs) {
-             await new Promise(r => setTimeout(r, 1000));
-             if (!this.activeWs) throw new Error('Neural Mesh Offline');
+        // If we have an active persistent connection, use it (Fast/Low Latency)
+        if (this.activeWs && this.activeWs.readyState === 1) {
+            const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
+            return new Promise((resolve, reject) => {
+                this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
+                setTimeout(() => {
+                    if (this.pendingRequests.has(rid)) {
+                        this.pendingRequests.delete(rid);
+                        reject(new Error('Neural Consensus Timeout (120s)'));
+                    }
+                }, 120000);
+
+                this.activeWs.send(JSON.stringify({
+                    type: 'gen_request',
+                    rid,
+                    prompt: task.prompt,
+                    model: task.model,
+                    svc: 'ollama' // Default to ollama for now or infer from metadata
+                }));
+            });
         }
 
-        // Logic to determine svc type based on metadata
-        let svcType = 'hf'; // default
-        this.peerMetadata.forEach(meta => {
-            if (meta.models && meta.models.includes(task.model)) {
-                if (meta.backend === 'ollama') svcType = 'ollama';
-                if (meta.backend === 'hf_remote') svcType = 'hf_remote';
-            }
-        });
+        // --- Serverless/Vercel Fallback: Direct HTTP Routing ---
+        console.log('[Mesh] Operating in Stateless/Serverless Mode. Routing direct...');
+        await this.syncGlobalMesh();
+        
+        const targetPeer = Array.from(this.peerMetadata.values()).find(p => 
+            p.models && p.models.includes(task.model)
+        );
 
-        const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
-        return new Promise((resolve, reject) => {
-            this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
-            setTimeout(() => {
-                if (this.pendingRequests.has(rid)) {
-                    this.pendingRequests.delete(rid);
-                    reject(new Error('Neural Consensus Timeout (120s)'));
+        if (!targetPeer) throw new Error(`Deep Mesh Search: No nodes found for model ${task.model}`);
+
+        // Infer FastAPI address (standard nodes use port 8000 for API)
+        let apiUrl = targetPeer.addr.replace('ws://', 'http://').replace(':4001', ':8000');
+        if (targetPeer.metrics?.api_url) apiUrl = targetPeer.metrics.api_url;
+
+        console.log(`[Mesh] Forwarding to Neural Gateway: ${apiUrl}`);
+        
+        try {
+            const resp = await fetch(`${apiUrl}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: task.prompt,
+                    model: task.model,
+                    stream: false
+                })
+            });
+            
+            if (!resp.ok) throw new Error(`Node Gateway Error: ${resp.status}`);
+            const data = await resp.json();
+            
+            return {
+                text: data.response || data.text,
+                rid: `srv-${crypto.randomBytes(2).toString('hex')}`,
+                metadata: {
+                    trust_score: 1.0,
+                    backend: 'fastapi-direct',
+                    node: targetPeer.addr
                 }
-            }, 120000); // Increased to 120s for large models
-
-            console.log(`[Mesh] Dispatching ${rid} (model: ${task.model}, svc: ${svcType})`);
-            this.activeWs.send(JSON.stringify({
-                type: 'gen_request',
-                rid,
-                prompt: task.prompt,
-                model: task.model || 'phi3',
-                svc: svcType
-            }));
-        });
+            };
+        } catch (e) {
+            console.error(`[Mesh] Serverless Route Failed: ${e.message}`);
+            throw new Error(`Consensus Failed: Node at ${targetPeer.addr} unreachable via HTTP.`);
+        }
     }
 
     getStats() {
         return {
             ...this.stats,
-            poolSize: this.nodes.size,
+            poolSize: this.peerMetadata.size,
             connected: !!this.activeWs,
             peers: Array.from(this.peerMetadata.values())
         };
     }
 
-    /**
-     * Decode and register via link
-     * Supports coithub:// and p2pnet://
-     */
     registerJoinLink(link) {
         try {
             const url = new URL(link);
-            const isCoit = url.protocol === 'coithub:';
-            const isP2P = url.protocol === 'p2pnet:';
-            
-            if (!isCoit && !isP2P) throw new Error('Unsupported protocol');
-            
             const bootstrapEnc = url.searchParams.get('bootstrap') || url.searchParams.get('peer');
             if (!bootstrapEnc) throw new Error('Missing peer address');
-
-            let bootstrapUrl;
-            try {
-                bootstrapUrl = Buffer.from(bootstrapEnc, 'base64').toString();
-            } catch {
-                bootstrapUrl = bootstrapEnc; // Fallback to raw if not b64
-            }
-            
+            let bootstrapUrl = Buffer.from(bootstrapEnc, 'base64').toString();
             if (!bootstrapUrl.includes('://')) bootstrapUrl = `ws://${bootstrapUrl}`;
-            
             this.nodes.add(bootstrapUrl);
-            if (!this.activeWs) this.connect();
-            
-            const metadata = {
-                network: url.searchParams.get('network') || 'unknown',
-                model: url.searchParams.get('model') || 'any',
-                hash: url.searchParams.get('hash') || '0x???'
-            };
-
-            return { success: true, node: bootstrapUrl, metadata };
+            this.connect();
+            return { success: true, node: bootstrapUrl };
         } catch (e) {
             return { success: false, error: e.message };
         }

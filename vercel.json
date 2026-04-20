@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "name": "bee2bee-network",
+  "builds": [
+    {
+      "src": "app/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    },
+    {
+      "src": "app/api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/app/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/app/$1",
+      "check": true
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/app/index.html"
+    }
+  ],
+  "env": {
+    "VITE_SUPABASE_URL": "@supabase_url",
+    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key"
+  }
+}

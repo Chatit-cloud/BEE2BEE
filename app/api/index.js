@@ -1,51 +1,55 @@
-/**
- * Vercel Serverless API Gateway for Bee2Bee
- */
-export default async function handler(req, res) {
-  const { url, method, body } = req;
-  // Support both local and remote nodes
-  const REMOTE_NODE = process.env.BEE2BEE_REMOTE_NODE || 'http://localhost:4001';
+import express from 'express';
+import cors from 'cors';
+import { bridge } from './bridge.js';
 
-  // Extract cleaned path
-  const path = url.replace('/api/', '');
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-  try {
-    // 1. Unified Consensus Path
-    if (path.includes('p2p/consensus')) {
-      if (method === 'OPTIONS') return res.status(204).end();
-      if (method === 'POST') {
-          const { task } = body;
-          if (!task || !task.prompt) return res.status(400).json({ error: 'Missing prompt' });
+// Consensus Execution
+app.post('/api/p2p/consensus', async (req, res) => {
+    const { task } = req.body;
+    if (!task || !task.prompt) return res.status(400).json({ error: 'Task prompt is required' });
 
-          // If a remote node is configured, forward the request via HTTP
-          // (Requires the P2P node to have an HTTP REST shim)
-          if (process.env.BEE2BEE_REMOTE_NODE) {
-              const resp = await fetch(`${REMOTE_NODE}/api/generate`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ prompt: task.prompt, model: task.model })
-              });
-              const data = await resp.json();
-              return res.status(200).json({
-                  text: data.text || data.result,
-                  metadata: { trust_score: 0.99, neural_path: 'remote-p2p-node' }
-              });
-          }
-
-          return res.status(200).json({
-              text: `Gateway Active. No remote node configured at BEE2BEE_REMOTE_NODE. \n\nReceived: "${task.prompt}"`,
-              metadata: { trust_score: 1.0, neural_path: 'vercel-edge-bridge' }
-          });
-      }
+    try {
+        const result = await bridge.request(task);
+        res.json({
+            text: result.text,
+            rid: result.rid,
+            metadata: {
+                trust_score: 0.999,
+                neural_path: 'direct-swarm-link',
+                engine: 'bee2bee-core',
+                mode: 'serverless'
+            }
+        });
+    } catch (e) {
+        console.error('API Error:', e.message);
+        res.status(504).json({ error: e.message });
     }
+});
 
-    // 2. Status
-    if (path.includes('p2p/status')) {
-      return res.status(200).json({ status: 'online', mode: 'serverless' });
-    }
+app.post('/api/p2p/register', (req, res) => {
+    const { link } = req.body;
+    if (!link) return res.status(400).json({ error: 'Missing join link' });
+    const result = bridge.registerJoinLink(link);
+    res.json(result);
+});
 
-    res.status(404).json({ error: 'Endpoint not found' });
-  } catch (error) {
-    res.status(502).json({ error: 'Gateway Communication Error' });
-  }
-}
+app.get('/api/p2p/status', (req, res) => {
+    res.json({
+        ...bridge.getStats(),
+        mode: 'serverless'
+    });
+});
+
+app.get('/api/p2p/mesh', (req, res) => {
+    res.json(bridge.getRegionalMesh());
+});
+
+app.post('/api/subscribe', (req, res) => {
+    res.json({ success: true, message: 'Subscribed to Neural Mesh.' });
+});
+
+// Export for Vercel
+export default app;

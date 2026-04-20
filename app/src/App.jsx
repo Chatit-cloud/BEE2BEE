@@ -147,8 +147,18 @@ const QuickRegister = ({ linkData, networkStats, onComplete }) => {
 
   const handleRegister = async () => {
     setStep('verifying');
-    // Actual registration handshake happens via the link parsing in App.js
-    setTimeout(() => setStep('monitoring'), 1500);
+    try {
+      await fetch('/api/p2p/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link: linkData.link })
+      });
+      // Allow time for P2P handshake
+      setTimeout(() => setStep('monitoring'), 1500);
+    } catch (e) {
+      console.error('Registration failed:', e);
+      setStep('form'); // Rollback on error
+    }
   };
 
   if (step === 'monitoring') {
