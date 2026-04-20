@@ -558,13 +558,32 @@ onSend={async (content) => {
             if (response.status === 504 || response.status === 503) {
                console.warn("[Mesh] Cloud Bridge timeout. Attempting Neural Direct-Link...");
                
-               // Try direct local node at common ports
-               const ports = [8000, 4001, 3000];
                let directSuccess = false;
                
-               for (const port of ports) {
+               // Use dynamic API from peer metadata
+               const peer = (networkStats.peers || [])[0];
+               const peerApiPort = peer?.api_port || 3333;
+               const peerApiHost = peer?.api_host;
+               
+               // Try peer public API first, then local fallback ports
+               const hosts = [];
+               
+               // 1. Try peer's public API if available
+               if (peerApiHost) {
+                   hosts.push({ host: peerApiHost, port: peerApiPort, type: 'public' });
+               }
+               
+               // 2. Try localhost with known ports
+               [3333, 8000, 4001, 3000].forEach(port => {
+                   hosts.push({ host: 'localhost', port, type: 'local' });
+               });
+               
+               for (const { host, port, type } of hosts) {
                    try {
-                       const localResp = await fetch(`http://localhost:${port}/chat`, {
+                       const url = `http://${host}:${port}/chat`;
+                       console.log(`[Mesh] Trying ${type} API: ${url}`);
+                       
+                       const localResp = await fetch(url, {
                            method: 'POST',
                            headers: { 'Content-Type': 'application/json' },
                            body: JSON.stringify({ 
@@ -578,13 +597,13 @@ onSend={async (content) => {
                            setMessages(prev => [...prev, { 
                                role: 'ai', 
                                text: localData.text || "Direct Link Success.", 
-                               metadata: { ...localData.metadata, mode: 'direct-ingress', port } 
+                               metadata: { ...localData.metadata, mode: type === 'public' ? 'public-api' : 'direct-ingress', host, port } 
                            }]);
                            directSuccess = true;
                            break;
                        }
                    } catch (localErr) {
-                       console.log(`[Mesh] Port ${port} failed:`, localErr.message);
+                       console.log(`[Mesh] ${host}:${port} failed:`, localErr.message);
                    }
                }
                

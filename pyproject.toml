@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "bee2bee"
-version = "3.3.11"
+version = "3.3.13"
 description = "Decentralized P2P network for AI model hosting and inference"
 authors = [{ name = "ConnectIT Team", email = "loaiabdalslam@gmail.com" }]
 readme = "README.md"

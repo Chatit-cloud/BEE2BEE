@@ -149,19 +149,19 @@ class P2PNode:
         
         async def _process_request(path, request_headers):
             """Handle non-websocket requests (like OPTIONS preflight)."""
-            if "Origin" in request_headers:
-                # Basic CORS response for OPTIONS
-                if request_headers.get("Access-Control-Request-Method"):
-                    return (
-                        http.HTTPStatus.OK,
-                        [
-                            ("Access-Control-Allow-Origin", "*"),
-                            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
-                            ("Access-Control-Allow-Headers", "*"),
-                            ("Access-Control-Max-Age", "86400"),
-                        ],
-                        b"",
-                    )
+            # Return 200 OK for OPTIONS requests (CORS preflight)
+            if request_headers.get("method", "").upper() == "OPTIONS":
+                return (
+                    http.HTTPStatus.OK,
+                    [
+                        ("Access-Control-Allow-Origin", "*"),
+                        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+                        ("Access-Control-Allow-Headers", "*"),
+                        ("Access-Control-Max-Age", "86400"),
+                    ],
+                    b"",
+                )
+            # Let websocket requests pass through
             return None
 
         async def handler(ws: WebSocketServerProtocol):
@@ -438,7 +438,9 @@ class P2PNode:
             "addr": self.addr,
             "region": self.region,
             "metrics": get_system_metrics(),
-            "services": services_meta
+            "services": services_meta,
+            "api_port": getattr(self, 'api_port', 8000),
+            "api_host": getattr(self, 'api_host', self.announce_host or self.host)
         }
 
     async def _on_message(self, ws, data: Dict[str, Any]):
@@ -792,6 +794,11 @@ async def run_p2p_node(
     console.print(f"[dim]Host: {host or '0.0.0.0'}, Port: {port or 0}, Region: {region}[/dim]")
     
     node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host, entrypoint_url=entrypoint_url, region=region)
+    
+    # Store API config on node for hello message
+    node.api_port = api_port or 8000
+    node.api_host = node.announce_host or node.host
+    
     await node.start()
     
     # Start API if requested

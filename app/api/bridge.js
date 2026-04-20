@@ -169,6 +169,8 @@ export class DynamicCoitHubBridge {
             metrics: msg.metrics || existing.metrics || {},
             models: msg.models || (msg.services ? Object.values(msg.services).flatMap(s => s.models || []) : []),
             backend: msg.backend || msg.metrics?.backend || existing.backend,
+            api_port: msg.api_port || existing.api_port || 8000,
+            api_host: msg.api_host || existing.api_host || null,
             status: 'active',
             last_seen: Date.now(),
             location: existing.location || [Math.random() * 120 - 60, Math.random() * 360 - 180]
@@ -232,9 +234,10 @@ export class DynamicCoitHubBridge {
             throw new Error(`Neural Search Failure: No nodes available for model "${task.model}"`);
         }
 
-        // Default to port 8000 for FastAPI fallback
-        let apiUrl = targetPeer.addr.replace('ws://', 'http://').replace(':4001', ':8000');
-        if (targetPeer.metrics?.api_url) apiUrl = targetPeer.metrics.api_url;
+        // Use the peer's API port and host from hello message
+        const apiPort = targetPeer.api_port || 8000;
+        const apiHost = targetPeer.api_host || targetPeer.addr?.replace('ws://', '').split(':')[0] || 'localhost';
+        let apiUrl = `http://${apiHost}:${apiPort}`;
 
         console.log(`[Mesh] Forwarding to Neural Peer: ${apiUrl}`);
         
