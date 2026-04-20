@@ -1,20 +1,38 @@
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Header
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
+from loguru import logger
 from .p2p_runtime import P2PNode
 
 # Global node instance
 node: Optional[P2PNode] = None
 
+# API Key Security
+API_KEY_NAME = "X-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(header_key: Optional[str] = Depends(api_key_header)):
+    config_key = os.getenv("BEE2BEE_API_KEY")
+    if not config_key:
+        # If no key is configured, API is open (useful for development)
+        return None
+    if header_key == config_key:
+        return header_key
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing API Key",
+    )
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global node
     # Initialize node on startup with random port or configured port
-    import os
     port = int(os.getenv("BEE2BEE_PORT", "4001"))
     host = os.getenv("BEE2BEE_HOST", "0.0.0.0")
     
@@ -31,7 +49,6 @@ async def lifespan(app: FastAPI):
         await node.connect_bootstrap(bootstrap)
 
     # Enable Supervisor Monitoring
-    # Use shorter interval (15s) for better stability over tunnels/NAT
     await node.enable_monitoring(interval_seconds=15)
     
     # --- PRINT INSTRUCTIONS FOR USER ---
@@ -39,11 +56,9 @@ async def lifespan(app: FastAPI):
     from .utils import get_lan_ip, get_public_ip, is_colab
     console = Console()
     
-    # Determine accessible address
     real_ip = get_lan_ip()
     public_ip = get_public_ip()
     
-    # If the node is bound to 0.0.0.0, we use the LAN IP. 
     if node.host == "0.0.0.0":
         display_host = real_ip
     else:
@@ -52,39 +67,26 @@ async def lifespan(app: FastAPI):
     bootstrap_addr = f"ws://{display_host}:{node.port}"
     public_bootstrap_addr = f"ws://{public_ip}:{node.port}" if public_ip else None
     
-    console.print("\n[bold yellow]✨ Main Point Started Successfully![/bold yellow]")
-    console.print("[dim]To connect other nodes to this network, run this command on them:[/dim]")
-    
-    # 1. LAN / Local
-    console.print(f"\n   [bold cyan]python -m bee2bee config bootstrap_url {bootstrap_addr}[/bold cyan] [dim](LAN/Local)[/dim]")
-
-    # 2. Public IP
-    if public_bootstrap_addr and public_ip != real_ip:
-         console.print(f"   [bold green]python -m bee2bee config bootstrap_url {public_bootstrap_addr}[/bold green] [dim](Public Internet)[/dim]")
-         console.print("   [dim italic]Note: Ensure port[/dim italic] [bold]{}[/bold] [dim italic]is forwarded/open on your router/firewall.[/dim italic]".format(node.port))
-
-    # 3. Colab / Tunneling
-    if is_colab():
-        console.print("\n[bold red]⚠️  Running in Google Colab?[/bold red]")
-        console.print("   Direct connections won't work. You MUST use a tunnel (e.g., ngrok).")
-        console.print("   [bold]Option 1 (ngrok):[/bold] Install ngrok, then run:")
-        console.print(f"      [cyan]ngrok http {node.port}[/cyan]")
-        console.print("      Then use `ws://<ngrok-url>` as your bootstrap_url.")
-
-    # -----------------------------------
+    console.print("\n[bold yellow]✨ Bee2Bee Node Started Successfully![/bold yellow]")
+    if os.getenv("BEE2BEE_API_KEY"):
+        console.print("[bold green]🔒 API Security Enabled (API Key required)[/bold green]")
+    else:
+        console.print("[bold red]⚠️  API Security Disabled (No BEE2BEE_API_KEY set)[/bold red]")
+        
+    console.print("[dim]To connect other nodes to this network, run:[/dim]")
+    console.print(f"   [bold cyan]python -m bee2bee config bootstrap_url {bootstrap_addr}[/bold cyan]")
         
     yield
-    
-    # Cleanup
     if node:
         await node.stop()
 
 app = FastAPI(title="Bee2Bee Node API", lifespan=lifespan)
 
 from fastapi.middleware.cors import CORSMiddleware
+# In production, this should be restricted
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,22 +103,23 @@ class ProviderInfo(BaseModel):
     latency_ms: Optional[float]
     models: List[str]
     price_per_token: Optional[float]
+    tag: Optional[str] = None
 
 @app.get("/")
 def home():
     return {"status": "ok", "node_id": node.peer_id if node else "not_started"}
 
-@app.get("/peers")
+@app.get("/peers", dependencies=[Depends(get_api_key)])
 def get_peers():
     if not node:
         return []
     res = []
     # print(f"API Peers state: {node.peers}") 
     for pid, info in node.peers.items():
-        print(f"Peer {pid} metrics: {info.get('metrics')}")
+        logger.debug(f"Peer {pid} metrics: {info.get('metrics')}")
         # Debug providers for this peer
         prov = node.providers.get(pid)
-        print(f"Peer {pid} services: {prov.keys() if prov else 'None'}")
+        logger.debug(f"Peer {pid} services: {prov.keys() if prov else 'None'}")
         
         res.append({
             "peer_id": pid,
@@ -128,13 +131,13 @@ def get_peers():
         })
     return res
 
-@app.get("/providers", response_model=List[ProviderInfo])
+@app.get("/providers", response_model=List[ProviderInfo], dependencies=[Depends(get_api_key)])
 def list_providers():
     if not node:
         return []
     return node.list_providers()
 
-@app.get("/connect")
+@app.get("/connect", dependencies=[Depends(get_api_key)])
 async def connect_peer(addr: str):
     if not node:
         return {"error": "Node not running"}
@@ -153,7 +156,7 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     max_new_tokens: Optional[int] = 64
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(get_api_key)])
 async def chat(req: ChatRequest):
     if not node:
         return {"error": "Node not running"}

@@ -17,6 +17,7 @@ bee2bee/p2p_runtime.py
 bee2bee/pieces.py
 bee2bee/protocol.py
 bee2bee/services.py
+bee2bee/stun_client.py
 bee2bee/utils.py
 examples/api_demo.py
 examples/p2p_request_demo.py

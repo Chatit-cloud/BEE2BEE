@@ -6,6 +6,7 @@ import psutil
 import websockets
 from typing import Dict, Any, Optional
 from rich.console import Console
+from loguru import logger
 
 from .protocol import (
     msg,
@@ -58,11 +59,11 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
 
     caches: dict[str, dict[str, Any]] = {}
     models: dict[str, Any] = {}  # model_id -> entries for hf/onnx/hf_part
-    console.log(f"[cyan]Node starting[/cyan] → connecting to [bold]{coordinator_url}[/bold]")
+    logger.info(f"Node starting → connecting to {coordinator_url}")
     while True:
         try:
             async with websockets.connect(coordinator_url, max_size=32 * 1024 * 1024) as ws:
-                console.log("[green]Connected to coordinator[/green]")
+                logger.success("Connected to coordinator")
                 # Register
                 await ws.send(
                     json.dumps(
@@ -84,7 +85,7 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
                     t = data.get("type")
                     if t == INFO and not node_id:
                         node_id = data.get("node_id")
-                        console.log(f"[green]Registered as[/green] {node_id}")
+                        logger.success(f"Registered as {node_id}")
                     elif t == TASK:
                         task_id = data.get("task_id")
                         payload = data.get("payload", {})
@@ -277,13 +278,13 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
                             else:
                                 await ws.send(json.dumps(msg(ERROR, task_id=task_id, error=f"unknown_task:{kind}")))
                         except Exception as e:
-                            console.log(f"[red]Task error[/red]: {e}")
+                            logger.error(f"Task error: {e}")
                             await ws.send(json.dumps(msg(ERROR, task_id=task_id, error=str(e))))
                     else:
                         # ignore others for now
                         pass
         except Exception as e:
-            console.log(f"[yellow]Disconnected or connect failed[/yellow]: {e}. Retrying in 2s...")
+            logger.warning(f"Disconnected or connect failed: {e}. Retrying in 2s...")
             await asyncio.sleep(2)
             continue
         # Outer try ends, reconnect

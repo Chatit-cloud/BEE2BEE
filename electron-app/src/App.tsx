@@ -1,27 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, MessageSquare, Server, Settings, Shield, RefreshCw, Send, Plus, Network, X, Link, Globe, Minus, Square, Maximize2, Wifi } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  MessageSquare, 
+  Settings, 
+  Send, 
+  Plus, 
+  ChevronRight, 
+  Cpu, 
+  Activity, 
+  Globe, 
+  Zap, 
+  Search,
+  Command,
+  Cloud,
+  Layers,
+  ArrowRight
+} from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Default to Local API, but allow override
+// Default to Local API
 const DEFAULT_API = "http://127.0.0.1:4002";
-
-// Extend Window interface for Electron APIs
-declare global {
-  interface Window {
-    electronWindow?: {
-      minimize: () => void;
-      maximize: () => void;
-      close: () => void;
-    };
-  }
-}
-
-type View = 'admin' | 'chat';
 
 interface Peer {
   peer_id: string;
@@ -29,6 +30,8 @@ interface Peer {
   latency_ms: number;
   health_status: string;
   last_audit: number;
+  tag?: string;
+  models: string[];
   metrics?: {
     cpu_percent: number;
     ram_percent: number;
@@ -42,409 +45,44 @@ interface ChatMessage {
   ts: number;
 }
 
-function App() {
-  const [activeView, setActiveView] = useState<View>('admin');
-  const [showConfig, setShowConfig] = useState(false);
-
-  // Dynamic API Configuration
-  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem("connectit_api_url") || DEFAULT_API);
-
-  const updateApiUrl = (url: string) => {
-    // Remove trailing slash
-    const cleanUrl = url.replace(/\/$/, "");
-    setApiUrl(cleanUrl);
-    localStorage.setItem("connectit_api_url", cleanUrl);
-  }
-
-  return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30">
-      {/* Background Effects */}
-      <div className="absolute inset-0 bg-grid opacity-[0.2] pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-primary/20 blur-[100px] rounded-full pointer-events-none" />
-
-      {/* Custom Title Bar */}
-      <div className="h-8 bg-card/30 border-b border-border/50 flex items-center justify-between px-4 select-none backdrop-blur-xl z-30" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-          <Network className="w-4 h-4 text-primary" />
-          <span>ConnectIT</span>
-        </div>
-        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <button
-            onClick={() => window.electronWindow?.minimize()}
-            className="w-8 h-8 hover:bg-secondary/50 rounded flex items-center justify-center transition-colors"
-            title="Minimize"
-          >
-            <Minus className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => window.electronWindow?.maximize()}
-            className="w-8 h-8 hover:bg-secondary/50 rounded flex items-center justify-center transition-colors"
-            title="Maximize"
-          >
-            <Square className="w-3 h-3" />
-          </button>
-          <button
-            onClick={() => window.electronWindow?.close()}
-            className="w-8 h-8 hover:bg-red-500/20 hover:text-red-400 rounded flex items-center justify-center transition-colors"
-            title="Close"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Container */}
-      <div className="flex flex-1 relative z-10 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-64 border-r border-border bg-card/50 flex flex-col backdrop-blur-xl z-20">
-          <div className="p-6 border-b border-border flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/25">
-              <Network className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">ConnectIT</span>
-          </div>
-
-          <nav className="flex-1 p-4 space-y-2">
-            <Button variant={activeView === 'admin' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('admin')} >
-              <Shield className="w-4 h-4" /> Network Admin
-            </Button>
-            <Button variant={activeView === 'chat' ? 'secondary' : 'ghost'} className="w-full justify-start gap-3 h-11" onClick={() => setActiveView('chat')} >
-              <MessageSquare className="w-4 h-4" /> AI Chat
-            </Button>
-          </nav>
-
-          <div className="p-4 border-t border-border bg-black/40">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm text-green-400">
-                <Globe className="w-3 h-3" />
-                <span className="font-medium">Online</span>
-              </div>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowConfig(true)}>
-                <Settings className="w-3 h-3" />
-              </Button>
-            </div>
-            <div className="text-[10px] text-muted-foreground font-mono truncate" title={apiUrl}>
-              API: {apiUrl.replace(/http:\/\/|https:\/\//, "")}
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <AnimatePresence mode='wait'>
-            {activeView === 'admin' && <AdminView key="admin" apiUrl={apiUrl} onConfigure={() => setShowConfig(true)} />}
-            {activeView === 'chat' && <ChatView key="chat" apiUrl={apiUrl} />}
-          </AnimatePresence>
-        </main>
-      </div>
-
-      {/* Config Modal */}
-      <AnimatePresence>
-        {showConfig && <ConfigModal onClose={() => setShowConfig(false)} apiUrl={apiUrl} setApiUrl={updateApiUrl} />}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-const ConfigModal = ({ onClose, apiUrl, setApiUrl }: { onClose: () => void, apiUrl: string, setApiUrl: (u: string) => void }) => {
-  const [entryPoint, setEntryPoint] = useState("");
-  const [localApiInput, setLocalApiInput] = useState(apiUrl);
-  const [status, setStatus] = useState("");
-
-  const handleConnect = async () => {
-    if (!entryPoint) return;
-    setStatus("Connecting to Peer...");
-    try {
-      const res = await fetch(`${apiUrl}/connect?addr=${encodeURIComponent(entryPoint)}`);
-      const data = await res.json();
-      if (data.status === 'connected') {
-        setStatus("Connected to Mesh!");
-        setTimeout(() => setStatus(""), 2000);
-      } else {
-        setStatus(`Error: ${data.message || 'Failed'}`);
-      }
-    } catch (e) {
-      setStatus("API Error: Backend Unreachable");
-    }
-  }
-
-  const handleSaveApi = () => {
-    setApiUrl(localApiInput);
-    setStatus("API URL Updated");
-    setTimeout(() => setStatus(""), 1000);
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-card border border-border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden"
-      >
-        <div className="p-6 border-b border-border flex justify-between items-center">
-          <h3 className="font-bold text-lg">System Configuration</h3>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-4 h-4" /></Button>
-        </div>
-        <div className="p-6 space-y-6">
-
-          {/* Section 1: Backend API */}
-          <div className="space-y-3 pb-4 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Globe className="w-4 h-4 text-primary" />
-              <label className="text-sm font-bold">Backend API URL</label>
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">
-              Control where the app sends commands. Use <code className="bg-secondary px-1 rounded">http://127.0.0.1:4002</code> for local, or an Ngrok HTTP URL for cloud.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={localApiInput}
-                onChange={e => setLocalApiInput(e.target.value)}
-                placeholder="http://127.0.0.1:4002"
-                className="font-mono text-xs"
-              />
-              <Button variant="secondary" onClick={handleSaveApi}>Set</Button>
-            </div>
-          </div>
-
-          {/* Section 2: P2P Connection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Link className="w-4 h-4 text-primary" />
-              <label className="text-sm font-bold">P2P Entry Point (Bootstrap)</label>
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="ws://192.168.1.X:4003"
-                value={entryPoint}
-                onChange={e => setEntryPoint(e.target.value)}
-                className="font-mono text-xs"
-              />
-              <Button onClick={handleConnect} disabled={!entryPoint}>Connect</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Enter the WebSocket address of a known peer (e.g., from Colab) to join the network.
-            </p>
-          </div>
-
-          {status && (
-            <div className={cn("text-xs p-3 rounded font-medium border", status.includes("Error") ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-green-500/10 border-green-500/20 text-green-400")}>
-              {status}
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
-const AdminView = ({ onConfigure, apiUrl }: { onConfigure: () => void, apiUrl: string }) => {
+export default function App() {
+  const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem("chatit_api_url") || DEFAULT_API);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("chatit_api_key") || "");
+  const [showSettings, setShowSettings] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchPeers = async () => {
-    setLoading(true);
-    setError(false);
     try {
-      const res = await fetch(`${apiUrl}/peers`);
+      const res = await fetch(`${apiUrl}/providers`, {
+        headers: { 'X-API-KEY': apiKey }
+      });
       const data = await res.json();
       setPeers(data);
+      setNetworkError(false);
+      // Auto-select first peer if none selected
+      if (!selectedPeer && data.length > 0) {
+        setSelectedPeer(data[0]);
+      }
     } catch (e) {
-      console.error("Failed to fetch peers", e);
-      setError(true);
-    } finally {
-      setLoading(false);
+      setNetworkError(true);
     }
   };
 
   useEffect(() => {
     fetchPeers();
-    const interval = setInterval(fetchPeers, 5000);
+    const interval = setInterval(fetchPeers, 10000); // 10s refresh
     return () => clearInterval(interval);
-  }, [apiUrl]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="flex flex-col h-full overflow-hidden"
-    >
-      <div className="p-8 space-y-8 flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Network Overview</h2>
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
-              <div className={cn("w-2 h-2 rounded-full", error ? "bg-red-500" : "bg-green-500")} />
-              Connected to {apiUrl}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onConfigure}>
-              <Plus className="w-4 h-4 mr-2" /> System Config
-            </Button>
-            <Button variant="outline" size="icon" onClick={fetchPeers} disabled={loading}>
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <StatsCard title="Active Peers" value={peers.length} icon={<Server className="w-4 h-4 text-blue-400" />} />
-          <StatsCard title="Avg Latency" value={`${Math.round(peers.reduce((acc, p) => acc + (p.latency_ms || 0), 0) / (peers.length || 1))}ms`} icon={<Activity className="w-4 h-4 text-green-400" />} />
-          <StatsCard title="Network Status" value={!error && peers.length > 0 ? "Healthy" : "Isolated"} icon={<Shield className={cn("w-4 h-4", !error && peers.length > 0 ? "text-primary" : "text-red-400")} />} />
-        </div>
-
-        <Card className="flex-1 border-border bg-card/50 backdrop-blur-sm shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-medium flex items-center gap-2">
-              <Network className="w-4 h-4" /> Connected Peers
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {error ? (
-              <div className="text-center py-12 space-y-2">
-                <div className="text-red-400 font-bold">Connection Failed</div>
-                <p className="text-sm text-muted-foreground">Could not connect to API at {apiUrl}</p>
-                <Button variant="outline" size="sm" onClick={onConfigure}>Change API URL</Button>
-              </div>
-            ) : peers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-secondary/50 flex items-center justify-center">
-                  <Server className="w-8 h-8 text-muted-foreground/50" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">No Peers Connected</h3>
-                  <p className="text-muted-foreground text-sm max-w-[250px] mx-auto">Your node is running in isolation. Connect to an entry point to join the mesh.</p>
-                </div>
-                <Button onClick={onConfigure}>Connect to Entry Point</Button>
-              </div>
-            ) : (
-              peers.map(peer => (
-                <div key={peer.peer_id} className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-all group">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-medium text-sm text-foreground">{peer.peer_id.slice(0, 12)}...</span>
-                      <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 uppercase border-0", peer.health_status === 'online' ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>{peer.health_status}</Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground font-mono">{peer.addr}</span>
-                  </div>
-                  <div className="flex items-center gap-4 relative group/metrics">
-                    {/* Hover Card for Metrics */}
-                    <div className="absolute bottom-full right-0 mb-2 w-48 p-3 rounded-lg bg-popover/90 backdrop-blur-md border border-border shadow-xl opacity-0 translate-y-2 group-hover/metrics:opacity-100 group-hover/metrics:translate-y-0 transition-all pointer-events-none z-50">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-white/10 pb-1 mb-1">
-                          <span>System Health</span>
-                          {peer.metrics ? <span className="text-green-400">Live</span> : <span className="text-amber-400">Waiting...</span>}
-                        </div>
-
-                        {peer.metrics ? (
-                          <>
-                            {/* CPU Detail */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
-                                <span>CPU</span>
-                                <span>{peer.metrics.cpu_percent.toFixed(1)}%</span>
-                              </div>
-                              <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
-                                <div
-                                  className={cn("h-full rounded-full transition-all", peer.metrics.cpu_percent > 80 ? "bg-red-500" : "bg-blue-500")}
-                                  style={{ width: `${Math.min(peer.metrics.cpu_percent, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* RAM Detail */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
-                                <span>RAM</span>
-                                <span>{peer.metrics.ram_percent.toFixed(1)}%</span>
-                              </div>
-                              <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
-                                <div
-                                  className={cn("h-full rounded-full transition-all", peer.metrics.ram_percent > 80 ? "bg-red-500" : "bg-purple-500")}
-                                  style={{ width: `${Math.min(peer.metrics.ram_percent, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* GPU Detail (Optional) */}
-                            {peer.metrics.gpu_percent !== undefined && (
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
-                                  <span>GPU</span>
-                                  <span>{peer.metrics.gpu_percent.toFixed(1)}%</span>
-                                </div>
-                                <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
-                                  <div
-                                    className={cn("h-full rounded-full transition-all", peer.metrics.gpu_percent > 80 ? "bg-red-500" : "bg-orange-500")}
-                                    style={{ width: `${Math.min(peer.metrics.gpu_percent, 100)}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="text-center py-2 text-xs text-muted-foreground italic">
-                            Collecting metrics...
-                          </div>
-                        )}
-
-                        {/* Latency Detail */}
-                        <div className="pt-1 mt-1 border-t border-white/10 flex justify-between text-xs">
-                          <span className="text-muted-foreground">Latency</span>
-                          <span className="font-mono">{peer.latency_ms ? peer.latency_ms.toFixed(0) : '-'}ms</span>
-                        </div>
-                      </div>
-
-                      {/* Arrow */}
-                      <div className="absolute -bottom-1 right-6 w-2 h-2 bg-popover rotate-45 border-r border-b border-border"></div>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground hidden group-hover:block">last seen: {Math.round((Date.now() - (peer.last_audit || Date.now())) / 1000)}s ago</div>
-
-                    {/* Trigger Icon */}
-                    <div className="flex items-center gap-2 cursor-help">
-                      <Wifi className={cn("w-4 h-4 transition-colors",
-                        !peer.latency_ms ? "text-muted-foreground/30" :
-                          peer.latency_ms < 100 ? "text-green-500" :
-                            peer.latency_ms < 300 ? "text-yellow-500" : "text-red-500"
-                      )} />
-                      <span className="font-mono text-sm">{peer.latency_ms ? peer.latency_ms.toFixed(0) : '-'}ms</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </motion.div>
-  );
-}
-
-const ChatView = ({ apiUrl }: { apiUrl: string }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [providerId, setProviderId] = useState("");
-  const [providers, setProviders] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Fetch providers on mount or when API URL changes
-    fetch(`${apiUrl}/providers`).then(r => r.json()).then(data => {
-      setProviders(data);
-      if (data.length > 0) setProviderId(data[0].peer_id);
-    }).catch(e => console.error(e));
-  }, [apiUrl]);
+  }, [apiUrl, apiKey]);
 
   const handleSend = async () => {
-    if (!input.trim() || !providerId) return;
-
-    const userMsg = { role: 'user', text: input, ts: Date.now() };
-    // @ts-ignore
+    if (!input.trim() || !selectedPeer) return;
+    const userMsg = { role: 'user' as const, text: input, ts: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setSending(true);
@@ -452,140 +90,300 @@ const ChatView = ({ apiUrl }: { apiUrl: string }) => {
     try {
       const res = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider_id: providerId,
-          prompt: userMsg.text,
-          max_new_tokens: 64
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
+        body: JSON.stringify({ 
+          provider_id: selectedPeer.peer_id, 
+          prompt: userMsg.text, 
+          model: selectedPeer.models[0] 
         })
       });
       const data = await res.json();
-
       if (data.status === 'ok') {
-        const aiMsg = { role: 'ai', text: data.result.text, ts: Date.now() };
-        // @ts-ignore
-        setMessages(prev => [...prev, aiMsg]);
+        setMessages(prev => [...prev, { role: 'ai', text: data.result.text, ts: Date.now() }]);
       } else {
-        const errMsg = { role: 'ai', text: `Error: ${data.message}`, ts: Date.now() };
-        // @ts-ignore
-        setMessages(prev => [...prev, errMsg]);
+        setMessages(prev => [...prev, { role: 'ai', text: `Error: ${data.message}`, ts: Date.now() }]);
       }
     } catch (e) {
-      const errMsg = { role: 'ai', text: `Connection Error`, ts: Date.now() };
-      // @ts-ignore
-      setMessages(prev => [...prev, errMsg]);
+      setMessages(prev => [...prev, { role: 'ai', text: "Connection to peer failed.", ts: Date.now() }]);
     } finally {
       setSending(false);
     }
   };
 
+  const filteredPeers = useMemo(() => {
+    return peers.filter(p => 
+      p.models[0]?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.peer_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [peers, searchQuery]);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col h-full"
-    >
-      <div className="p-4 border-b border-border flex items-center justify-between bg-card/20 backdrop-blur z-10 sticky top-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
-            <span className="font-bold text-white text-lg">Ai</span>
+    <div className="flex h-screen bg-[#fafafa] text-[#09090b] font-sans selection:bg-black/5 overflow-hidden">
+      {/* Navigation Sidebar */}
+      <aside className="w-[320px] border-r border-[#e4e4e7] bg-white flex flex-col z-50">
+        <div className="p-6 pb-2">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
+                <Cloud className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold text-lg tracking-tight">Chatit.cloud</span>
+            </div>
+            <Button variant="ghost" size="icon" className="rounded-full w-8 h-8" onClick={() => setShowSettings(true)}>
+              <Settings className="w-4 h-4 opacity-40 hover:opacity-100 transition-opacity" />
+            </Button>
           </div>
-          <div>
-            <h3 className="font-bold text-lg">ConnectIT Intelligence</h3>
-            {providers.length > 0 ? (
-              <div className="flex items-center gap-1 text-xs text-green-400">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" />
-                Connected to Network ({providers.length} nodes)
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-xs text-yellow-500">
-                Looking for providers...
-              </div>
-            )}
+
+          <div className="relative group mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30 group-focus-within:opacity-100 transition-opacity" />
+            <Input 
+              placeholder="Route to model..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 bg-transparent border-[#e4e4e7] rounded-xl text-sm focus-visible:ring-0 focus-visible:border-black/20 transition-all"
+            />
           </div>
         </div>
 
-        <select
-          className="bg-secondary/50 border border-input text-xs rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary/50 min-w-[200px]"
-          value={providerId}
-          onChange={e => setProviderId(e.target.value)}
-        >
-          {providers.length === 0 && <option>No Providers Available</option>}
-          {providers.map(p => (
-            <option key={p.peer_id} value={p.peer_id}>
-              {p.models[0] || 'Unknown Model'} ({p.peer_id.slice(0, 6)})
-            </option>
+        <div className="flex-1 overflow-y-auto px-1 space-y-0.5 custom-scrollbar">
+          <div className="px-5 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-30">Active Routes</span>
+          </div>
+          {filteredPeers.map((peer) => (
+            <button
+              key={peer.peer_id}
+              onClick={() => {
+                setSelectedPeer(peer);
+                setMessages([]); // Clear chat for new model for focus
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-5 py-3.5 transition-all relative group",
+                selectedPeer?.peer_id === peer.peer_id 
+                  ? "bg-black/5" 
+                  : "hover:bg-black/[0.02]"
+              )}
+            >
+              {selectedPeer?.peer_id === peer.peer_id && (
+                <motion.div layoutId="active-indicator" className="absolute left-0 w-1.5 h-6 bg-black rounded-r-full" />
+              )}
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all",
+                selectedPeer?.peer_id === peer.peer_id ? "bg-white border-black/10 shadow-sm" : "bg-black/[0.02] border-transparent"
+              )}>
+                <Layers className={cn("w-5 h-5", selectedPeer?.peer_id === peer.peer_id ? "text-black" : "text-black/20")} />
+              </div>
+              <div className="flex flex-col items-start overflow-hidden text-left">
+                <span className="text-sm font-semibold truncate w-full group-hover:translate-x-1 transition-transform">{peer.models[0] || "General Model"}</span>
+                <span className="text-[10px] font-mono opacity-40 uppercase tracking-tighter">
+                  {peer.latency_ms.toFixed(0)}ms · {peer.peer_id.slice(0, 8)}
+                </span>
+              </div>
+            </button>
           ))}
-        </select>
-      </div>
-
-      <div className="flex-1 bg-gradient-to-b from-black/5 to-black/20 p-4 space-y-6 overflow-y-auto scroll-smooth">
-        {messages.length === 0 && (
-          <div className="flex justify-center mt-32">
-            <div className="bg-card/50 border border-border/50 rounded-2xl p-8 max-w-md text-center backdrop-blur shadow-xl">
-              <MessageSquare className="w-10 h-10 mx-auto text-primary mb-4" />
-              <h4 className="font-bold text-xl mb-2">Welcome to the Grid</h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">Select a provider from the network and start chatting securely via P2P. Your messages are routed directly to the node.</p>
+          {filteredPeers.length === 0 && !networkError && (
+            <div className="p-8 text-center opacity-30 mt-10">
+              <Globe className="w-10 h-10 mx-auto mb-4" />
+              <p className="text-xs font-medium">Scanning for available model endpoints...</p>
             </div>
+          )}
+          {networkError && (
+            <div className="p-8 text-center text-red-500/50 mt-10">
+              <Zap className="w-10 h-10 mx-auto mb-4" />
+              <p className="text-xs font-medium uppercase tracking-widest">Protocol Sync Failure</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-[#e4e4e7] bg-white/[0.01]">
+          <div className="flex items-center gap-3">
+            <div className={cn("w-2 h-2 rounded-full", networkError ? "bg-red-500" : "bg-green-500")} />
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+              {networkError ? "Link Offline" : "System Synchronized"}
+            </span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Workspace */}
+      <main className="flex-1 flex flex-col relative bg-white overflow-hidden">
+        {/* Workspace Header */}
+        <header className="h-20 border-b border-[#e4e4e7] flex items-center justify-between px-10 bg-white/50 backdrop-blur-xl z-20">
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+              <h2 className="font-bold text-lg leading-none mb-1">{selectedPeer?.models[0] || "Select specialized model"}</h2>
+              <div className="flex items-center gap-2 opacity-30">
+                <Command className="w-3 h-3" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Routing via {selectedPeer?.peer_id.slice(0, 16)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 py-2 px-4 rounded-full bg-black/[0.02] border border-black/[0.05]">
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-bold opacity-30 uppercase tracking-widest">Compute</span>
+                <span className="text-xs font-mono font-bold">{(selectedPeer?.metrics?.cpu_percent || 0).toFixed(0)}%</span>
+              </div>
+              <div className="w-px h-6 bg-black/10" />
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-bold opacity-30 uppercase tracking-widest">Memory</span>
+                <span className="text-xs font-mono font-bold">{(selectedPeer?.metrics?.ram_percent || 0).toFixed(0)}%</span>
+              </div>
+            </div>
+            <Badge className="bg-black text-white hover:bg-black rounded-full px-3 py-1 text-[10px] uppercase font-bold tracking-widest h-8 flex items-center">Secure</Badge>
+          </div>
+        </header>
+
+        {/* Messaging Interface */}
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto px-10 py-10 space-y-12 scroll-smooth custom-scrollbar">
+            {messages.length === 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto"
+              >
+                <div className="w-24 h-24 rounded-[40px] bg-black shadow-2xl flex items-center justify-center mb-10">
+                  <Cloud className="w-12 h-12 text-white" />
+                </div>
+                <h1 className="text-4xl font-black tracking-tighter mb-4">Chatit.cloud</h1>
+                <p className="text-base text-black/40 leading-relaxed">
+                  Decentralized routing initialized. Connect with private models across the global mesh network securely.
+                </p>
+                <div className="mt-12 flex flex-wrap justify-center gap-2">
+                  <QuickCommand label="Summarize logs" />
+                  <QuickCommand label="Network health" />
+                  <QuickCommand label="Inference debug" />
+                </div>
+              </motion.div>
+            )}
+
+            {messages.map((m, i) => (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={i} 
+                className={cn("flex w-full", m.role === 'user' ? 'justify-end' : 'justify-start')}
+              >
+                <div className={cn(
+                  "max-w-2xl px-0 py-0",
+                  m.role === 'user' ? "text-right" : "text-left"
+                )}>
+                  <div className="flex items-center gap-2 mb-2 opacity-30 uppercase text-[10px] font-bold tracking-widest">
+                    {m.role === 'user' ? 'Local Operator' : (selectedPeer?.models[0] || 'Remote Intelligence')}
+                    <span className="w-1 h-1 rounded-full bg-black/20" />
+                    {new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className={cn(
+                    "text-xl leading-relaxed tracking-tight font-medium",
+                    m.role === 'user' ? "text-black" : "text-black/60"
+                  )}>
+                    {m.text}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+            
+            {sending && (
+              <div className="flex justify-start">
+                 <div className="flex items-center gap-1 opacity-20">
+                    <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce" />
+                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Unified Input Overlay */}
+          <div className="px-10 pb-10">
+            <div className="max-w-4xl mx-auto relative group">
+              <div className="absolute inset-x-0 bottom-full h-24 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+              <form 
+                className="relative flex items-center"
+                onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+              >
+                <div className="absolute left-6 text-black/20">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <Input 
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  disabled={sending || !selectedPeer}
+                  placeholder={selectedPeer ? `Message ${selectedPeer.models[0]}...` : "Select a route to begin..."}
+                  className="h-20 bg-[#f4f4f5] border-transparent rounded-[32px] pl-16 pr-24 text-lg font-medium focus-visible:ring-2 focus-visible:ring-black/5 focus-visible:border-black/5 transition-all shadow-sm"
+                />
+                <button 
+                  type="submit" 
+                  disabled={sending || !input}
+                  className="absolute right-3 w-14 h-14 rounded-full bg-black text-white hover:scale-105 active:scale-95 disabled:opacity-5 transition-all flex items-center justify-center"
+                >
+                  <ArrowRight className="w-6 h-6" />
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Modern Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="w-full max-w-md bg-white border border-[#e4e4e7] rounded-[40px] overflow-hidden shadow-2xl p-10"
+            >
+              <div className="flex justify-between items-center mb-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-black/5 flex items-center justify-center">
+                    <Settings className="w-3 h-3 text-black" />
+                  </div>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em]">Route Configuration</h3>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} className="rounded-full w-10 h-10 hover:bg-black/5 text-black">
+                   <ChevronRight className="w-5 h-5" />
+                </Button>
+              </div>
+              
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-30">Protocol Endpoint</label>
+                  <Input 
+                    value={apiUrl}
+                    onChange={e => { setApiUrl(e.target.value); localStorage.setItem("chatit_api_url", e.target.value); }}
+                    className="h-14 bg-[#f4f4f5] border-transparent rounded-2xl px-6 font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold uppercase tracking-widest opacity-30">Authentication Key</label>
+                  <Input 
+                    type="password"
+                    value={apiKey}
+                    onChange={e => { setApiKey(e.target.value); localStorage.setItem("chatit_api_key", e.target.value); }}
+                    className="h-14 bg-[#f4f4f5] border-transparent rounded-2xl px-6 font-mono text-sm"
+                    placeholder="X-API-KEY"
+                  />
+                </div>
+                
+                <div className="pt-6">
+                   <Button onClick={() => setShowSettings(false)} className="w-full h-16 rounded-[24px] bg-black text-white font-bold text-base hover:bg-black/90 active:scale-95 transition-all">Synchronize Configuration</Button>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
-
-        {messages.map((m, i) => (
-          <div key={i} className={cn("flex w-full animate-in fade-in slide-in-from-bottom-2", m.role === 'user' ? 'justify-end' : 'justify-start')}>
-            <div className={cn(
-              "max-w-[80%] rounded-2xl px-5 py-3 text-sm shadow-md",
-              m.role === 'user' ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-secondary text-secondary-foreground rounded-tl-sm"
-            )}>
-              <p className="leading-relaxed">{m.text}</p>
-              <div className="text-[10px] opacity-50 mt-1 text-right font-mono">{new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            </div>
-          </div>
-        ))}
-        {sending && (
-          <div className="flex w-full justify-start">
-            <div className="bg-secondary text-secondary-foreground rounded-2xl rounded-tl-sm px-4 py-3 text-sm flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-              <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-              <div className="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="p-4 border-t border-border bg-card/40 backdrop-blur-md pb-6">
-        <form
-          className="flex gap-2 max-w-4xl mx-auto"
-          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-        >
-          <Input
-            placeholder="Type your message..."
-            className="flex-1 bg-secondary/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/50 text-base px-4 h-12 rounded-xl shadow-inner"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            disabled={sending}
-          />
-          <Button size="icon" className="h-12 w-12 rounded-xl shadow-lg shadow-primary/20" disabled={sending || !providerId}>
-            <Send className="w-5 h-5" />
-          </Button>
-        </form>
-      </div>
-    </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
 
-const StatsCard = ({ title, value, icon }: any) => (
-  <Card className="bg-card/50 backdrop-blur-sm border-border">
-    <CardContent className="p-6 flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <div className="text-2xl font-bold mt-1 tracking-tight">{value}</div>
-      </div>
-      <div className="w-10 h-10 rounded-xl bg-secondary/50 flex items-center justify-center">
-        {icon}
-      </div>
-    </CardContent>
-  </Card>
-)
-
-export default App;
+function QuickCommand({ label }: { label: string }) {
+  return (
+    <button className="px-5 py-2.5 rounded-full border border-black/[0.08] hover:border-black/20 hover:bg-black/[0.01] transition-all text-sm font-medium opacity-60 hover:opacity-100">
+      {label}
+    </button>
+  );
+}

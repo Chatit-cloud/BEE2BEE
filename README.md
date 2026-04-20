@@ -90,6 +90,14 @@ python -m bee2bee serve-ollama --model llama3
 ```
 *Note: This creates a separate peer node on your machine.*
 
+**Option 3: Remote Inference (Cloud)**
+Execute models entirely on Hugging Face's servers via Inference API. **No GPU required** on your local machine!
+```bash
+# Deploys Zephyr 7B (Runs on Hugging Face Cloud)
+python -m bee2bee deploy-hf --model HuggingFaceH4/zephyr-7b-beta --remote --token YOUR_HF_TOKEN
+```
+*Note: The node acts as a proxy/gateway to the remote model.*
+
 ---
 
 ### 4. Bee2Bee Cloud (Google Colab)

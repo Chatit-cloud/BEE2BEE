@@ -1,7 +1,9 @@
 
 from typing import Any, Dict, List, Optional
 import time
+import os
 from rich.console import Console
+from loguru import logger
 
 console = Console()
 
@@ -155,3 +157,66 @@ class OllamaService(BaseService):
             }
         except Exception as e:
             raise ServiceError(f"Ollama Exec Error: {e}")
+
+class HFRemoteService(BaseService):
+    def __init__(self, model_name: str, token: Optional[str] = None, price_per_token: float = 0.005):
+        super().__init__("hf_remote")
+        self.model_name = model_name
+        self.token = token or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        self.price_per_token = price_per_token
+        self.client = None
+
+    def load_sync(self):
+        try:
+            from huggingface_hub import InferenceClient
+            self.client = InferenceClient(model=self.model_name, token=self.token)
+            logger.success(f"HF Remote Client initialized for model '{self.model_name}' (remote)")
+        except ImportError:
+            raise ServiceError("huggingface_hub not installed. Run 'pip install huggingface-hub'")
+        except Exception as e:
+            raise ServiceError(f"Failed to init HF Remote Client: {e}")
+
+    def get_metadata(self) -> Dict[str, Any]:
+        return {
+            "models": [self.model_name],
+            "price_per_token": self.price_per_token,
+            "tag": "remote",
+            "backend": "hf_remote"
+        }
+
+    def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.client:
+            raise ServiceError("Remote client not initialized")
+        
+        prompt = params.get("prompt")
+        max_new = int(params.get("max_new_tokens", 32))
+        
+        if not prompt:
+            raise ServiceError("Missing prompt")
+
+        try:
+            t0 = time.time()
+            # result = client.text_generation(...)
+            response = self.client.text_generation(
+                prompt,
+                max_new_tokens=max_new,
+                temperature=params.get("temperature", 0.7),
+                do_sample=params.get("do_sample", True)
+            )
+            
+            latency_ms = int((time.time() - t0) * 1000.0)
+            
+            # Rough estimation of tokens (char length / 4)
+            tokens = len(response) // 4
+            cost = self.price_per_token * tokens
+
+            return {
+                "text": response,
+                "tokens": tokens,
+                "latency_ms": latency_ms,
+                "price_per_token": self.price_per_token,
+                "cost": cost,
+                "backend": "hf_remote"
+            }
+        except Exception as e:
+            raise ServiceError(f"HF Remote Execution Error: {e}")

@@ -1,7 +1,21 @@
 import click
 import asyncio
 import os
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv()
+
 from rich.console import Console
+from loguru import logger
+import sys
+
+# Configure Loguru
+logger.remove()
+logger.add(sys.stderr, level=os.getenv("LOG_LEVEL", "INFO"))
+logger.add("bee2bee.log", rotation="10 MB", level="DEBUG")
+
+console = Console()
 
 from .hf import has_transformers, has_datasets, load_model_and_tokenizer, export_torchscript, export_onnx
 from .p2p import generate_join_link, parse_join_link
@@ -52,10 +66,12 @@ def config(key, value):
 @click.option('--price-per-token', default=0.0, type=float, help='Price per output token')
 @click.option('--host', default=None, help='Bind host (default: 0.0.0.0)')
 @click.option('--port', default=None, type=int, help='Bind port (default: random)')
-@click.option('--public-host', default=None, help='Publicly accessible IP/Hostname (if behind NAT/Cloud)')
+@click.option('--public-host', default=None, help='Publicly accessible IP/Hostname')
 @click.option('--bootstrap-link', default=None, help='Bootstrap URL (default: from config)')
-def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link):
-    """Deploy a Hugging Face text-generation service on the P2P network."""
+@click.option('--remote/--local', default=False, help='Run model remotely via Hugging Face Inference API')
+@click.option('--token', default=None, help='Hugging Face Hub Token (required if remote)')
+def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link, remote, token):
+    """Deploy a Hugging Face text-generation service (local or remote) on the P2P network."""
     
     # Auto-resolve bootstrap
     if not bootstrap_link:
@@ -65,13 +81,19 @@ def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link):
     host = host or None
     port = port or None
 
+    if token:
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+
+    backend = "hf_remote" if remote else "hf"
+
     asyncio.run(run_p2p_node(
         host=host, 
         port=port, 
         bootstrap_link=bootstrap_link,  # Will use config value
         model_name=model, 
         price_per_token=price_per_token,
-        announce_host=public_host
+        announce_host=public_host,
+        backend=backend
     ))
 
 

@@ -1,30 +1,37 @@
-# React + TypeScript + Vite
+# Chatit.cloud
+### Decentralized Model Routing & Entrypoint
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Chatit.cloud is a minimalist web application designed to act as a secure entrypoint and router between private LLM models in a decentralized mesh network.
 
-Currently, two official plugins are available:
+## Features
+- **Minimalist Design**: Typography-first, high-end aesthetic inspired by modern SaaS platforms.
+- **Model Routing**: Seamlessly switch between different neural points and specialized models.
+- **Mesh Synchronization**: Real-time telemetry and health monitoring of network nodes.
+- **Secure Communication**: End-to-end encrypted protocol paths.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Technologies
+- **Core**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS v4, Framer Motion
+- **Icons**: Lucide React
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-- Configure the top-level `parserOptions` property like this:
+2. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
-```
+3. **Build for Production**:
+   ```bash
+   npm run build
+   ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+## Configuration
+Access the **Nexus Core Settings** via the gear icon in the sidebar to configure your protocol endpoint and authentication keys.
+- Default API: `http://127.0.0.1:4002`
+- Authentication: `X-API-KEY` header

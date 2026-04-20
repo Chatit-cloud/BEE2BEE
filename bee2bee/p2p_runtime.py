@@ -8,6 +8,7 @@ import websockets
 from websockets.asyncio.server import serve, ServerConnection
 from websockets.asyncio.client import connect, ClientConnection
 from rich.console import Console
+from loguru import logger
 
 from .p2p import parse_join_link, sha256_hex_bytes
 from .utils import new_id, is_colab
@@ -74,20 +75,20 @@ class P2PNode:
         
         # Only log if we have peers to avoid spam
         if len(peers_to_check) > 0:
-            console.log(f"[dim]Running Health Check on {len(peers_to_check)} peers...[/dim]")
+            logger.info(f"Running Health Check on {len(peers_to_check)} peers...")
         
         for pid, peer_data in peers_to_check:
             ws = peer_data.get("ws")
             # Handle different websockets versions (some don't have .closed)
             is_closed = getattr(ws, "closed", False) or not getattr(ws, "open", True)
             if not ws or is_closed:
-                console.log(f"[yellow]Peer {pid} connection appears closed[/yellow]")
+                logger.warning(f"Peer {pid} connection appears closed")
                 continue
                 
             # 1. Latency Check (Ping)
             t0 = time.time()
             try:
-                console.log(f"[debug] Sending ping to {pid} with metrics")
+                logger.debug(f"Sending ping to {pid} with metrics")
                 # Send ping with metrics
                 await self._send(ws, {
                     "type": "ping", 
@@ -111,7 +112,7 @@ class P2PNode:
                     self.providers[pid]["health"] = "degraded"
 
     async def start(self):
-        console.log(f"[cyan]Starting P2P Node on {self.host}:{self.port}[/cyan]")
+        logger.info(f"Starting P2P Node on {self.host}:{self.port}")
         
         async def handler(ws: WebSocketServerProtocol):
             await self._handle_connection(ws)
@@ -119,15 +120,15 @@ class P2PNode:
         try:
             self.server = await websockets.serve(handler, self.host, self.port, max_size=32 * 1024 * 1024)
             self._running = True
-            console.log(f"[green]WebSocket server started successfully[/green]")
+            logger.success("WebSocket server started successfully")
         except Exception as e:
-            console.log(f"[red]Failed to start WebSocket server: {e}[/red]")
+            logger.error(f"Failed to start WebSocket server: {e}")
             raise
 
         # Resolve actual port if 0
         if self.port == 0:
             self.port = self.server.sockets[0].getsockname()[1]
-            console.log(f"[cyan]OS assigned port: {self.port}[/cyan]")
+            logger.info(f"OS assigned port: {self.port}")
 
         # Resolve announce address
         # If announce_host is set, use it.
@@ -135,11 +136,11 @@ class P2PNode:
         # Else use host.
         if self.announce_host:
             display_host = self.announce_host
-            console.log(f"[cyan]Using announce_host: {display_host}[/cyan]")
+            logger.info(f"Using announce_host: {display_host}")
         elif self.host == "0.0.0.0":
             from .utils import get_lan_ip
             display_host = get_lan_ip()
-            console.log(f"[cyan]Detected LAN IP: {display_host}[/cyan]")
+            logger.info(f"Detected LAN IP: {display_host}")
 
             # Try UPnP only if we are on 0.0.0.0 (likely local dev / home router)
             console.log(f"[dim]Attempting Auto Port Forwarding for port {self.port}...[/dim]")
@@ -159,13 +160,13 @@ class P2PNode:
                     console.log(f"[cyan]External IP detected: {display_host}[/cyan]")
 
                     if forward_result.external_port != self.port:
-                        console.log(f"[yellow]⚠️ Port translation: {self.port} → {forward_result.external_port}[/yellow]")
+                        logger.warning(f"Port translation: {self.port} → {forward_result.external_port}")
                         self.external_port = forward_result.external_port
                 else:
-                    console.log(f"[yellow]⚠️ Auto port forwarding failed or returned no result[/yellow]")
+                    logger.warning("Auto port forwarding failed or returned no result")
                     forward_result = None
             except Exception as e:
-                console.log(f"[yellow]⚠️ Port forwarding failed: {e}[/yellow]")
+                logger.error(f"Port forwarding failed: {e}")
                 forward_result = None
             
             if not forward_result or not forward_result.success:
@@ -176,7 +177,7 @@ class P2PNode:
                     stun_res = await try_stun()
                     if stun_res:
                         stun_ip, stun_port = stun_res
-                        console.log(f"[green]✅ STUN Success:[/green] Public IP is {stun_ip}:{stun_port}")
+                        logger.success(f"STUN Success: Public IP is {stun_ip}:{stun_port}")
                         
                         display_host = stun_ip
                         
@@ -188,9 +189,9 @@ class P2PNode:
                         else:
                             console.log(f"[yellow]Note: You may need to manually forward port {self.port} on your router.[/yellow]")
                     else:
-                        console.log(f"[red]❌ STUN failed. Using LAN IP: {display_host}[/red]")
+                        logger.error(f"STUN failed. Using LAN IP: {display_host}")
                 except Exception as e:
-                    console.log(f"[red]STUN error: {e}[/red]")
+                    logger.error(f"STUN error: {e}")
                     
                 # Still try to get public IP for manual instructions
                 try:
@@ -217,10 +218,10 @@ class P2PNode:
         # Start monitoring loop
         self._monitor_active = True
         asyncio.create_task(self._monitoring_loop(15))
-        console.log(f"[dim]Monitoring loop started[/dim]")
+        logger.debug("Monitoring loop started")
         
-        console.log(f"[bold green]✅ P2P Node Started[/bold green] at {self.addr}")
-        console.log(f"[dim]Peer ID: {self.peer_id}[/dim]")
+        logger.success(f"P2P Node Started at {self.addr}")
+        logger.info(f"Peer ID: {self.peer_id}")
 
     async def stop(self):
         console.log(f"[yellow]Stopping P2P Node...[/yellow]")
@@ -230,41 +231,41 @@ class P2PNode:
         if self.server:
             self.server.close()
             await self.server.wait_closed()
-            console.log(f"[dim]WebSocket server closed[/dim]")
+            logger.debug("WebSocket server closed")
         
         # Close all peer connections
         async with self._lock:
             for pid, info in self.peers.items():
                 try:
                     await info["ws"].close()
-                    console.log(f"[dim]Closed connection to peer {pid}[/dim]")
+                    logger.debug(f"Closed connection to peer {pid}")
                 except:
                     pass
             self.peers.clear()
-            console.log(f"[green]✅ P2P Node Stopped[/green]")
+            logger.success("P2P Node Stopped")
 
     async def connect_bootstrap(self, link_or_addr: str):
         addrs: List[str]
         if link_or_addr.startswith("p2pnet://"):
             parsed = parse_join_link(link_or_addr)
             addrs = [a for a in parsed.get("bootstrap", [])]
-            console.log(f"[cyan]Parsed join link, bootstrap addresses: {addrs}[/cyan]")
+            logger.info(f"Parsed join link, bootstrap addresses: {addrs}")
         else:
             addrs = [link_or_addr]
             
         for addr in addrs:
             try:
-                console.log(f"[cyan]Connecting to bootstrap: {addr}[/cyan]")
+                logger.info(f"Connecting to bootstrap: {addr}")
                 await self._connect_peer(addr)
-                console.log(f"[green]✅ Connected to bootstrap: {addr}[/green]")
+                logger.success(f"Connected to bootstrap: {addr}")
                 return  # Success on first connection
             except Exception as e:
-                console.log(f"[yellow]Bootstrap connect failed {addr}: {e}[/yellow]")
-        console.log(f"[red]❌ All bootstrap connections failed[/red]")
+                logger.warning(f"Bootstrap connect failed {addr}: {e}")
+        logger.error("All bootstrap connections failed")
 
     async def add_service(self, service: BaseService):
         self.local_services[service.name] = service
-        console.log(f"[green]✅ Added service: {service.name}[/green]")
+        logger.success(f"Added service: {service.name}")
         # Broadcast announcement
         await self._broadcast({
             "type": "service_announce",
@@ -280,13 +281,13 @@ class P2PNode:
 
     async def _connect_peer(self, addr: str):
         if addr == self.addr:
-            console.log(f"[yellow]Skipping self-connection[/yellow]")
+            logger.debug("Skipping self-connection")
             return
             
         try:
-            console.log(f"[cyan]Connecting to peer: {addr}[/cyan]")
+            logger.info(f"Connecting to peer: {addr}")
             ws = await connect(addr, max_size=32*1024*1024)
-            console.log(f"[green]✅ Connected to {addr}[/green]")
+            logger.success(f"Connected to {addr}")
         except Exception as e:
             raise IOError(f"Could not connect to {addr}: {e}")
             
@@ -300,31 +301,31 @@ class P2PNode:
         asyncio.create_task(self._peer_reader(ws))
 
     async def _handle_connection(self, ws: ServerConnection):
-        console.log(f"[cyan]New connection from {ws.remote_address}[/cyan]")
+        logger.info(f"New connection from {ws.remote_address}")
         await self._peer_reader(ws)
 
     async def _peer_reader(self, ws: ClientConnection | ServerConnection):
         rem = ws.remote_address
-        console.log(f"[dim]Reader started for {rem}[/dim]")
+        logger.debug(f"Reader started for {rem}")
         try:
             async for raw in ws:
-                console.log(f"[debug] Received {len(raw)} bytes from {rem}")
+                logger.debug(f"Received {len(raw)} bytes from {rem}")
                 try:
                     data = json.loads(raw)
                     msg_type = data.get("type")
-                    console.log(f"[debug] Msg type: {msg_type} from {rem}")
+                    logger.debug(f"Msg type: {msg_type} from {rem}")
                     await self._on_message(ws, data)
                 except json.JSONDecodeError as e:
-                    console.log(f"[red]Valid JSON expected from {rem}: {e}[/red]")
+                    logger.error(f"Valid JSON expected from {rem}: {e}")
                     continue
                 except Exception as e:
-                    console.log(f"[red]Error handling message from {rem}: {e}[/red]")
+                    logger.error(f"Error handling message from {rem}: {e}")
                     import traceback
                     traceback.print_exc()
         except websockets.exceptions.ConnectionClosed as e:
-            console.log(f"[yellow]Connection closed {rem}: {e.code} {e.reason}[/yellow]")
+            logger.warning(f"Connection closed {rem}: {e.code} {e.reason}")
         except Exception as e:
-            console.log(f"[red]Connection error {rem}:[/red] {e}")
+            logger.error(f"Connection error {rem}: {e}")
         finally:
             await self._on_disconnect(ws)
 
@@ -334,26 +335,26 @@ class P2PNode:
                 if info.get("ws") is ws:
                     self.peers.pop(pid, None)
                     self.providers.pop(pid, None)
-                    console.log(f"[yellow]Peer disconnected: {pid}[/yellow]")
+                    logger.info(f"Peer disconnected: {pid}")
                     break
 
     async def _send(self, ws, obj: Dict[str, Any]):
         try:
             msg = json.dumps(obj)
             await ws.send(msg)
-            console.log(f"[debug] Sent message type: {obj.get('type')}")
+            logger.debug(f"Sent message type: {obj.get('type')}")
         except Exception as e:
-            console.log(f"[yellow]Send failed: {e}[/yellow]")
+            logger.warning(f"Send failed: {e}")
 
     async def _broadcast(self, obj: Dict[str, Any]):
         async with self._lock:
             peers = list(self.peers.values())
         
         if not peers:
-            console.log(f"[dim]No peers to broadcast to[/dim]")
+            logger.debug("No peers to broadcast to")
             return
             
-        console.log(f"[debug] Broadcasting to {len(peers)} peers")
+        logger.debug(f"Broadcasting to {len(peers)} peers")
         tasks = [self._send(p["ws"], obj) for p in peers]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -374,7 +375,7 @@ class P2PNode:
 
     async def _on_message(self, ws, data: Dict[str, Any]):
         msg_type = data.get("type")
-        console.log(f"[debug] Handling message type: {msg_type}")
+        logger.debug(f"Handling message type: {msg_type}")
         
         handlers = {
             "hello": self._handle_hello,
@@ -392,12 +393,12 @@ class P2PNode:
         if handler:
             await handler(ws, data)
         else:
-            console.log(f"[yellow]Unknown message type: {msg_type}[/yellow]")
+            logger.warning(f"Unknown message type: {msg_type}")
 
     async def _handle_hello(self, ws, data):
         pid = data.get("peer_id")
         addr = data.get("addr")
-        console.log(f"[cyan]HELLO from peer {pid} at {addr}[/cyan]")
+        logger.info(f"HELLO from peer {pid} at {addr}")
         
         async with self._lock:
             # Reclassify peer with correct ID
@@ -408,7 +409,7 @@ class P2PNode:
                     break
             
             if old_pid and old_pid != pid:
-                console.log(f"[dim]Reclassifying peer {old_pid} -> {pid}[/dim]")
+                logger.debug(f"Reclassifying peer {old_pid} -> {pid}")
                 self.peers.pop(old_pid)
                 
             # Preserve existing metrics if present
@@ -419,7 +420,7 @@ class P2PNode:
             svcs = data.get("services", {})
             if svcs:
                 self.providers[pid] = svcs
-                console.log(f"[cyan]Peer {pid} services: {list(svcs.keys())}[/cyan]")
+                logger.info(f"Peer {pid} services: {list(svcs.keys())}")
 
         # Reply with our hello and peer list
         await self._send(ws, self._make_hello_msg())
@@ -432,31 +433,31 @@ class P2PNode:
 
     async def _handle_peer_list(self, ws, data):
         peers = data.get("peers", [])
-        console.log(f"[cyan]Received peer list with {len(peers)} addresses[/cyan]")
+        logger.info(f"Received peer list with {len(peers)} addresses")
         for addr in peers:
             if addr == self.addr:
                 continue
             # Simple check to avoid duplicates (O(N) but N is small)
             if not any(v.get("addr") == addr for v in self.peers.values()):
-                console.log(f"[dim]Connecting to new peer from list: {addr}[/dim]")
+                logger.debug(f"Connecting to new peer from list: {addr}")
                 asyncio.create_task(self._connect_peer(addr))
 
     async def _handle_ping(self, ws, data):
         # Store received metrics if present
         metrics = data.get("metrics")
         if metrics:
-            console.log(f"[debug] Received metrics from peer")
+            logger.debug("Received metrics from peer")
         
         async with self._lock:
             found_peer = False
             for p, info in self.peers.items():
                 if info["ws"] is ws:
                     self.peers[p]["metrics"] = metrics
-                    console.log(f"[debug] Updated metrics for {p}")
+                    logger.debug(f"Updated metrics for {p}")
                     found_peer = True
                     break
             if not found_peer:
-                console.log(f"[yellow]Could not find peer for WS[/yellow]")
+                logger.warning("Could not find peer for WS")
         
         await self._send(ws, {"type": "pong", "ts": data.get("ts")})
 
@@ -472,13 +473,13 @@ class P2PNode:
                     # record latency for provider selection
                     if pid in self.providers:
                         self.providers[pid]["_latency"] = rtt
-                    console.log(f"[debug] Peer {pid} RTT: {rtt:.1f}ms")
+                    logger.debug(f"Peer {pid} RTT: {rtt:.1f}ms")
                     break
 
     async def _handle_service_announce(self, ws, data):
         svc = data.get("service")
         meta = data.get("meta", {})
-        console.log(f"[cyan]Service announce: {svc} from peer[/cyan]")
+        logger.info(f"Service announce: {svc} from peer")
         
         async with self._lock:
             for pid, info in self.peers.items():
@@ -486,69 +487,70 @@ class P2PNode:
                     if pid not in self.providers:
                         self.providers[pid] = {}
                     self.providers[pid][svc] = meta
-                    console.log(f"[green]✅ Registered service {svc} from peer {pid}[/green]")
+                    logger.success(f"Registered service {svc} from peer {pid}")
                     break
 
     async def _handle_gen_request(self, ws, data):
         rid = data.get("rid")
         svc_name = data.get("svc", "hf")
-        console.log(f"[cyan]Generation request {rid} for service {svc_name}[/cyan]")
+        logger.info(f"Generation request {rid} for service {svc_name}")
         
         # Determine service
         svc = self.local_services.get(svc_name)
         
         if not svc:
-            console.log(f"[red]Service {svc_name} not found locally[/red]")
+            logger.error(f"Service {svc_name} not found locally")
             await self._send(ws, {"type": "gen_result", "rid": rid, "error": "no_service"})
             return
             
         try:
-            console.log(f"[debug] Executing service {svc_name}")
+            logger.debug(f"Executing service {svc_name}")
             result = svc.execute(data)
             response = {"type": "gen_result", "rid": rid, **result}
             await self._send(ws, response)
-            console.log(f"[green]✅ Sent generation result for {rid}[/green]")
+            logger.success(f"Sent generation result for {rid}")
         except ServiceError as e:
-            console.log(f"[red]Service error for {rid}: {e}[/red]")
+            logger.error(f"Service error for {rid}: {e}")
             await self._send(ws, {"type": "gen_result", "rid": rid, "error": str(e)})
         except Exception as e:
-            console.log(f"[red]Unexpected error for {rid}: {e}[/red]")
+            logger.error(f"Unexpected error for {rid}: {e}")
             await self._send(ws, {"type": "gen_result", "rid": rid, "error": f"internal_error: {str(e)}"})
 
     async def _handle_gen_result(self, ws, data):
         rid = data.get("rid")
-        console.log(f"[debug] Received gen_result for request {rid}")
+        logger.debug(f"Received gen_result for request {rid}")
         if rid in self._pending_requests:
             future = self._pending_requests.pop(rid)
             if not future.done():
                 if "error" in data:
-                    console.log(f"[red]Request {rid} failed: {data['error']}[/red]")
+                    logger.error(f"Request {rid} failed: {data['error']}")
                     future.set_exception(RuntimeError(data["error"]))
                 else:
-                    console.log(f"[green]✅ Request {rid} succeeded[/green]")
+                    logger.success(f"Request {rid} succeeded")
                     future.set_result(data)
         else:
-            console.log(f"[yellow]Unknown request ID: {rid}[/yellow]")
+            logger.warning(f"Unknown request ID: {rid}")
 
     async def _handle_piece_request(self, ws, data):
         # ... logic as before ...
-        console.log(f"[debug] Piece request received")
+        logger.debug("Piece request received")
         pass
 
     async def _handle_piece_data(self, ws, data):
         # ... logic as before ...
-        console.log(f"[debug] Piece data received")
+        logger.debug("Piece data received")
         pass
 
     # --- Public API ---
 
     def list_providers(self) -> List[Dict[str, Any]]:
         out = []
-        console.log(f"[debug] Listing providers, current count: {len(self.providers)}")
+        logger.debug(f"Listing providers, current count: {len(self.providers)}")
         for pid, svcs in self.providers.items():
             all_models = []
             min_price = float('inf')
             found_ai_service = False
+            service_tag = None
             
             for svc_name, meta in svcs.items():
                 if svc_name.startswith("_"): 
@@ -560,6 +562,9 @@ class P2PNode:
                     price = meta.get("price_per_token", 0.0)
                     if price < min_price:
                         min_price = price
+                    # Pick up the tag if it's there (remote, etc.)
+                    if "tag" in meta and not service_tag:
+                         service_tag = meta["tag"]
             
             if found_ai_service:
                 out.append({
@@ -568,14 +573,15 @@ class P2PNode:
                     "latency_ms": svcs.get("_latency"),
                     "models": list(set(all_models)),
                     "price_per_token": min_price if min_price != float('inf') else 0.0,
+                    "tag": service_tag
                 })
         
-        console.log(f"[debug] Found {len(out)} providers")
+        logger.debug(f"Found {len(out)} providers")
         return out
 
     def pick_provider(self, model_name: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         candidates = []
-        console.log(f"[debug] Picking provider for model: {model_name}")
+        logger.debug(f"Picking provider for model: {model_name}")
         
         for pid, svcs in self.providers.items():
             # Check all services
@@ -587,17 +593,17 @@ class P2PNode:
                     price = meta.get("price_per_token", 0.0)
                     latency = svcs.get("_latency", 99999.0)
                     candidates.append((pid, price, latency, svc_name))
-                    console.log(f"[debug] Found candidate: {pid}, price: {price}, latency: {latency}")
+                    logger.debug(f"Found candidate: {pid}, price: {price}, latency: {latency}")
                     break  # Found a service on this peer
         
         if not candidates:
-            console.log(f"[yellow]No providers found for model {model_name}[/yellow]")
+            logger.warning(f"No providers found for model {model_name}")
             return None
             
         # Sort by price, then latency
         candidates.sort(key=lambda x: (x[1], x[2]))
         best_id, best_price, best_latency, best_svc = candidates[0]
-        console.log(f"[green]✅ Selected provider: {best_id}, service: {best_svc}, price: {best_price}, latency: {best_latency}[/green]")
+        logger.success(f"Selected provider: {best_id}, service: {best_svc}, price: {best_price}, latency: {best_latency}")
         
         # Return meta plus the service name so caller can use it
         best_svcs = self.providers[best_id]
@@ -612,7 +618,7 @@ class P2PNode:
     async def request_generation(self, provider_id: str, prompt: str, max_new_tokens: int = 32, model_name: Optional[str] = None):
         info = self.peers.get(provider_id)
         if not info:
-            console.log(f"[red]Provider {provider_id} not connected[/red]")
+            logger.error(f"Provider {provider_id} not connected")
             raise RuntimeError("provider_not_connected")
             
         rid = new_id("req")
@@ -628,7 +634,7 @@ class P2PNode:
                 for s, meta in svcs.items():
                     if not s.startswith("_") and model_name in meta.get("models", []):
                         target_svc = s
-                        console.log(f"[debug] Using service {target_svc} for model {model_name}")
+                        logger.debug(f"Using service {target_svc} for model {model_name}")
                         break
             
             # If not found or not specified, pick first available (heuristic)
@@ -636,7 +642,7 @@ class P2PNode:
                 for s in svcs.keys():
                     if not s.startswith("_"):
                         target_svc = s
-                        console.log(f"[debug] Fallback to service {target_svc}")
+                        logger.debug(f"Fallback to service {target_svc}")
                         break
 
         req = {
@@ -648,19 +654,19 @@ class P2PNode:
             "svc": target_svc
         }
         
-        console.log(f"[cyan]Sending generation request {rid} to {provider_id}[/cyan]")
+        logger.info(f"Sending generation request {rid} to {provider_id}")
         await self._send(info["ws"], req)
         
         try:
             result = await asyncio.wait_for(future, timeout=60.0)
-            console.log(f"[green]✅ Generation request {rid} completed[/green]")
+            logger.success(f"Generation request {rid} completed")
             return result
         except asyncio.TimeoutError:
             self._pending_requests.pop(rid, None)
-            console.log(f"[red]❌ Generation request {rid} timed out[/red]")
+            logger.error(f"Generation request {rid} timed out")
             raise RuntimeError("request_timed_out")
         except Exception as e:
-            console.log(f"[red]❌ Generation request {rid} failed: {e}[/red]")
+            logger.error(f"Generation request {rid} failed: {e}")
             raise
 
 
@@ -694,6 +700,10 @@ async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, b
         svc = None
         if backend == "hf":
             svc = HFService(model_name, float(price_per_token or 0.0))
+        elif backend == "hf_remote":
+            from .services import HFRemoteService
+            # Get token from env or parameters if we extend it later
+            svc = HFRemoteService(model_name, price_per_token=float(price_per_token or 0.005))
         elif backend == "ollama":
             from .services import OllamaService
             svc = OllamaService(model_name)
@@ -729,7 +739,7 @@ async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, b
             await asyncio.sleep(15)
             # Periodic Heartbeat
             peer_count = len(node.peers)
-            console.log(f"[dim]💓 Heartbeat | Peers: {peer_count} | Services: {len(node.local_services)}[/dim]")
+            logger.debug(f"💓 Heartbeat | Peers: {peer_count} | Services: {len(node.local_services)}")
             
     except asyncio.CancelledError:
         console.print(f"\n[yellow]👋 Stopping node...[/yellow]")
