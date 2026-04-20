@@ -115,7 +115,7 @@ const Landing = ({ onStart }) => {
 };
 
 // --- Quick Registration & Survey ---
-const QuickRegister = ({ linkData, networkStats, onComplete }) => {
+const QuickRegister = ({ linkData, networkStats, fetchStats, onComplete }) => {
   const [formData, setFormData] = useState({ usage: 'Commercial', tags: 'gpu-node', survey: 'Fast' });
   const [step, setStep] = useState('form');
   const [liveMetrics, setLiveMetrics] = useState({ tps: 0, mem: 0, trust: 0, status: 'connecting' });
@@ -170,6 +170,7 @@ const QuickRegister = ({ linkData, networkStats, onComplete }) => {
       
       if (result.success) {
         // Wait for P2P handshake with longer timeout
+        if (fetchStats) await fetchStats(); 
         setTimeout(() => setStep('monitoring'), 2000);
       } else {
         console.error('Registration failed:', result.error);
@@ -534,7 +535,7 @@ export default function App() {
 
   if (view === 'landing') return <Landing onStart={() => setView('mesh')} />;
   if (view === 'mesh') return <MeshExplorer meshData={meshData} onBack={() => setView('landing')} onSelectNode={handleSelectNode} />;
-  if (view === 'quick-register') return <QuickRegister linkData={linkData} networkStats={networkStats} onComplete={() => setView('dashboard')} />;
+  if (view === 'quick-register') return <QuickRegister linkData={linkData} networkStats={networkStats} fetchStats={fetchStats} onComplete={async () => { await fetchStats(); setView('dashboard'); }} />;
   
   return (
     <Dashboard 
@@ -564,62 +565,72 @@ onSend={async (content) => {
             console.warn(`[Mesh] Cloud Bridge unreachable (Status: ${response?.status || 'network-error'}). Attempting Neural Direct-Link...`);
             
             let directSuccess = false;
-            // Use dynamic API from peer metadata (includes public IP)
-            const peer = (networkStats.peers || [])[0];
-               const peerApiPort = peer?.api_port || 3333;
-               const peerApiHost = peer?.api_host || peer?.public_ip;
-               
-               // Try peer public API first, then local fallback
-               const hosts = [];
-               
-               // 1. Try peer's public API (using the public IP from hello message)
-               if (peerApiHost) {
-                   hosts.push({ host: peerApiHost, port: peerApiPort, type: 'public' });
-               }
-               
-               // 2. Try localhost with known ports
-               [3333, 8000, 4001, 3000].forEach(port => {
-                   hosts.push({ host: 'localhost', port, type: 'local' });
-               });
-               
-               for (const { host, port, type } of hosts) {
-                   try {
-                       const url = `http://${host}:${port}/chat`;
-                       console.log(`[Mesh] Trying ${type} API: ${url}`);
-                       
-                       const localResp = await fetch(url, {
-                           method: 'POST',
-                           headers: { 'Content-Type': 'application/json' },
-                           body: JSON.stringify({ 
-                               prompt: content, 
-                               model: selectedModel,
-                               max_new_tokens: 2048
-                           })
-                       });
-                       if (localResp.ok) {
-                           const localData = await localResp.json();
-                           setMessages(prev => [...prev, { 
-                               role: 'ai', 
-                               text: localData.text || "Direct Link Success.", 
-                               metadata: { ...localData.metadata, mode: type === 'public' ? 'public-api' : 'direct-ingress', host, port } 
-                           }]);
-                           directSuccess = true;
-                           break;
-                       } else {
-                           console.log(`[Mesh] ${host}:${port} returned ${localResp.status}`);
-                       }
-                   } catch (localErr) {
-                       console.log(`[Mesh] ${host}:${port} failed:`, localErr.message);
-                   }
-               }
-               
-               if (directSuccess) return;
-               
-               setMessages(prev => [...prev, { 
-                   role: 'ai', 
-                   text: `No nodes available. Make sure your node is running:\npython -m bee2bee serve-ollama --model ${selectedModel}`, 
-                   metadata: { error: true } 
-               }]);
+            
+            // Collect all potential targets from the entire peer pool
+            const potentialHosts = [];
+            
+            // 1. Collect all potential targets from the official peer pool
+            (networkStats.peers || []).forEach(peer => {
+                const port = peer.api_port || (peer.metrics && peer.metrics.api_port) || 8000;
+                const host = peer.api_host || peer.public_ip || (peer.addr ? peer.addr.replace('ws://', '').split(':')[0] : null);
+                
+                if (host) {
+                    potentialHosts.push({ host, port, type: 'remote-peer' });
+                }
+            });
+
+            // 2. Discover all distinct API ports currently active in the mesh for local fallback
+            const meshPorts = new Set([3333, 8000, 4001]); // Standard defaults
+            (networkStats.peers || []).forEach(p => {
+                const pPort = p.api_port || (p.metrics && p.metrics.api_port);
+                if (pPort) meshPorts.add(Number(pPort));
+            });
+
+            // 3. Add dynamic localhost fallbacks based on mesh activity
+            Array.from(meshPorts).forEach(port => {
+                potentialHosts.push({ host: 'localhost', port, type: 'local-dynamic' });
+            });
+
+            console.log(`[Mesh] Attempting Direct-Link across ${potentialHosts.length} targets...`);
+
+            for (const { host, port, type } of potentialHosts) {
+                if (directSuccess) break;
+                try {
+                    const url = `http://${host}:${port}/generate`;
+                    console.log(`[Mesh] Trying ${type}: ${url}`);
+                    
+                    const localResp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            prompt: content, 
+                            model: selectedModel,
+                            max_new_tokens: 2048,
+                            temperature: 0.7
+                        })
+                    });
+
+                    if (localResp.ok) {
+                        const localData = await localResp.json();
+                        setMessages(prev => [...prev, { 
+                            role: 'ai', 
+                            text: localData.text || localData.response || "Inference Success.", 
+                            metadata: { ...localData.metadata, mode: 'direct-ingress', host, port } 
+                        }]);
+                        directSuccess = true;
+                    }
+                } catch (err) {
+                    console.log(`[Mesh] ${host}:${port} unavailable:`, err.message);
+                }
+            }
+            
+            if (directSuccess) return;
+            
+            setMessages(prev => [...prev, { 
+                role: 'ai', 
+                text: `Consensus Timeout (Cloud) & Direct-Link failed. Make sure your local node is running with:\npython -m bee2bee serve-ollama --model ${selectedModel}`, 
+                metadata: { error: true } 
+            }]);
             } else {
                 const data = await response.json();
                 setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (No Response).", metadata: data.metadata }]);

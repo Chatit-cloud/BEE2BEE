@@ -65,6 +65,16 @@ export class DynamicCoitHubBridge {
                 this._setupHandlers();
                 console.log(`[Mesh] ✅ Connected to: ${this.activeUrl}`);
                 this.stats.activeNode = this.activeUrl;
+                
+                // Immediate metadata injection for the registered node to avoid zero-state
+                const nodeAddr = this.activeUrl.replace('ws://', '').replace('wss://', '');
+                this._updatePeerMetadata(this.activeUrl, {
+                    peer_id: nodeAddr.split(':')[0],
+                    region: 'Auto-Joined',
+                    status: 'active',
+                    metrics: { throughput: 0, trust_score: 0.99 }
+                });
+
                 return;
             } catch (e) {
                 console.error(`[Mesh] Failed to connect to ${nodeUrl}:`, e.message);
@@ -169,7 +179,7 @@ export class DynamicCoitHubBridge {
             metrics: msg.metrics || existing.metrics || {},
             models: msg.models || (msg.services ? Object.values(msg.services).flatMap(s => s.models || []) : []),
             backend: msg.backend || msg.metrics?.backend || existing.backend,
-            api_port: msg.api_port || existing.api_port || 8000,
+            api_port: msg.api_port || msg.metrics?.api_port || existing.api_port || 8000,
             api_host: msg.api_host || msg.public_ip || existing.api_host || null,
             public_ip: msg.public_ip || existing.public_ip || null,
             status: 'active',
@@ -312,6 +322,14 @@ export class DynamicCoitHubBridge {
             let bootstrapUrl = Buffer.from(padded, 'base64').toString();
             if (!bootstrapUrl.includes('://')) bootstrapUrl = `ws://${bootstrapUrl}`;
             console.log(`[Bridge] Registering node: ${bootstrapUrl}`);
+
+            const apiPort = url.searchParams.get('api_port');
+            if (apiPort) {
+                this._updatePeerMetadata(bootstrapUrl, { 
+                    api_port: parseInt(apiPort),
+                    peer_id: bootstrapUrl.split('://')[1].split(':')[0] // Initial guess
+                });
+            }
             
             // Set as priority node
             this.registeredNode = bootstrapUrl;

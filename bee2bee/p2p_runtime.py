@@ -80,6 +80,10 @@ class P2PNode:
         from .utils import get_system_metrics
         metrics = get_system_metrics()
         
+        # Inject API Port for dynamic discovery
+        metrics["api_port"] = getattr(self, "api_port", 8000)
+        metrics["backend"] = "pypi-runtime"
+        
         models = []
         for svc in self.local_services.values():
             meta = svc.get_metadata()
@@ -894,7 +898,7 @@ async def run_p2p_node(
             # Standard console link if terminal supports it
             from urllib.parse import quote
             encoded_link = quote(join_link, safe='')
-            web_reg_url = f"https://coithub.org/register?link={encoded_link}&region={quote(region, safe='')}&tag={quote(backend, safe='')}"
+            web_reg_url = f"https://coithub.org/register?link={encoded_link}&region={quote(region, safe='')}&tag={quote(backend, safe='')}&api_port={api_port}"
             
             console.print(f"\n[bold green]✨ One-Click Registration Enabled[/bold green]")
             console.print(f"[blue]Register and Monitor live at:[/blue] [link={web_reg_url}]{web_reg_url}[/link]")

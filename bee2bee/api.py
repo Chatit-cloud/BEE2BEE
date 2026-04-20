@@ -33,16 +33,19 @@ async def get_api_key(header_key: Optional[str] = Depends(api_key_header)):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global node
-    # Initialize node on startup with random port or configured port
-    port = int(os.getenv("BEE2BEE_PORT", "4001"))
-    host = os.getenv("BEE2BEE_HOST", "0.0.0.0")
-    
-    announce_host = os.getenv("BEE2BEE_ANNOUNCE_HOST")
-    announce_port_str = os.getenv("BEE2BEE_ANNOUNCE_PORT")
-    announce_port = int(announce_port_str) if announce_port_str else None
+    if node is None:
+        # Initialize node on startup with random port or configured port
+        port = int(os.getenv("BEE2BEE_PORT", "4001"))
+        host = os.getenv("BEE2BEE_HOST", "0.0.0.0")
+        
+        announce_host = os.getenv("BEE2BEE_ANNOUNCE_HOST")
+        announce_port_str = os.getenv("BEE2BEE_ANNOUNCE_PORT")
+        announce_port = int(announce_port_str) if announce_port_str else None
 
-    node = P2PNode(host=host, port=port, announce_host=announce_host, announce_port=announce_port)
-    await node.start()
+        node = P2PNode(host=host, port=port, announce_host=announce_host, announce_port=announce_port)
+        await node.start()
+    else:
+        logger.info("Using pre-seeded P2P node")
     
     # Auto-bootstrap if env var is set
     bootstrap = os.getenv("BEE2BEE_BOOTSTRAP")
@@ -160,6 +163,7 @@ class ChatRequest(BaseModel):
     stream: Optional[bool] = False
 
 @app.post("/chat", dependencies=[Depends(get_api_key)])
+@app.post("/generate", dependencies=[Depends(get_api_key)])
 async def chat(req: ChatRequest):
     if not node:
         return {"error": "Node not running"}
