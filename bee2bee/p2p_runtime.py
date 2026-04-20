@@ -697,23 +697,36 @@ class P2PNode:
             raise
 
 
-async def run_p2p_node(host: Optional[str] = None, port: Optional[int] = None, bootstrap_link: Optional[str] = None, 
-                       model_name: Optional[str] = None, price_per_token: Optional[float] = None, 
-                       announce_host: Optional[str] = None, backend: str = "hf"):
+async def run_p2p_node(
+    host: str = None, 
+    port: int = None, 
+    bootstrap_link: str = None, 
+    model_name: str = None, 
+    price_per_token: float = 0.0, 
+    announce_host: str = None, 
+    backend: str = "hf",
+    api_port: int = None
+):
+    """Entry point for running a peer node with one or more models."""
     from .p2p import generate_join_link
     
-    # Defaults
-    if host is None:
-        host = "0.0.0.0" 
-        
-    if port is None:
-        port = 0  # Let OS assign random port
-        
     console.print(f"\n[bold cyan]🚀 Starting P2P Node[/bold cyan]")
-    console.print(f"[dim]Host: {host}, Port: {port}, Announce: {announce_host}[/dim]")
+    console.print(f"[dim]Host: {host or '0.0.0.0'}, Port: {port or 0}, Announce: {announce_host}[/dim]")
     
-    node = P2PNode(host=host, port=port, announce_host=announce_host)
+    node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host)
     await node.start()
+    
+    # Start API if requested
+    if api_port:
+        import uvicorn
+        from .api import app as api_app
+        # Seed the global node in api.py
+        import bee2bee.api
+        bee2bee.api.node = node
+        config = uvicorn.Config(api_app, host=node.host, port=api_port, log_level="warning")
+        server = uvicorn.Server(config)
+        asyncio.create_task(server.serve())
+        console.print(f"[bold green]🚀 API Gateway started on http://{node.host}:{api_port}[/bold green]")
     
     # Port/Addr is now auto-resolved by start()
     

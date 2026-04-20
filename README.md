@@ -1,35 +1,91 @@
-# Bee2Bee: Decentralized P2P AI Network
+# 🐝 Bee2Bee: The Neural Consensus P2P Network
 
 [![PyPI version](https://badge.fury.io/py/bee2bee.svg)](https://badge.fury.io/py/bee2bee)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 
-**Bee2Bee** is a next-generation peer-to-peer network for distributed AI. It allows you to transform any hardware—from local high-end GPUs to cloud instances and Google Colab—into a global AI node with zero-config networking.
+**Bee2Bee** is a decentralized, peer-to-peer neural consensus engine designed to make AI inference accessible, transparent, and resilient. It allows anyone to contribute compute to a global mesh and anyone to consume it through a unified, high-performance API.
 
 ---
 
-## 📦 Installation
+## 🏗️ Architecture
 
+Bee2Bee operates as a **Decentralized Mesh** where every node is both a consumer and potentially a provider:
+
+-   **Neural Nodes**: Host models (Ollama, HF, Transformers) and register via the **Global Registry**.
+-   **Consensus Router**: Intelligently routes requests to the lowest-latency, highest-reliability nodes.
+-   **API Sidecar**: Every node optionally hosts a **FastAPI** management layer for real-time telemetry.
+
+---
+
+## 🚀 Quick Start (Production)
+
+### 1. Installation
 ```bash
 pip install bee2bee
 ```
 
-*For specific backends (Transformers, Torch, ONNX):*
+### 2. Launch a Worker Node (The Consumer/Provider)
+Run a node that automatically joins the network and hosts a model:
 ```bash
-pip install "bee2bee[hf,torch]"
+# Deploys a Llama3 provider via Ollama with an API sidecar on port 8000
+python -m bee2bee serve-ollama --model llama3 --api-port 8000
+```
+
+### 3. Connect to the Mesh
+To join the global discovery map on the [Chatit.cloud Dashboard](https://chatit.cloud):
+```bash
+python -m bee2bee config bootstrap_url ws://bootstrap.chatit.cloud:4003
 ```
 
 ---
 
-## 🏗 System Architecture
+## 🛠️ Developer Guide
 
-The Bee2Bee ecosystem is designed for resilience and low latency:
+### Developing Solutions (Python)
+Integrate P2P intelligence directly into your apps using our `rich`-ready SDK:
 
-1.  **Main Point (Tracker/API)**: Orchestrates the P2P mesh and exposes a unified REST API for inference.
-2.  **Worker Nodes (Providers)**: The compute engine. Hosts models (Ollama, HF, Remote) and registers with the Global Registry.
-3.  **Global Registry (Supabase)**: Provides a redundant discovery layer for real-time peer telemetry and maps.
-4.  **Desktop App (Frontend)**: A minimalist, typography-first dashboard for network management and chat.
+```python
+import asyncio
+from bee2bee import P2PNode
+
+async def main():
+    # Initialize P2P entrypoint
+    node = P2PNode()
+    await node.start()
+    
+    # Discovery
+    providers = await node.discover_providers(model="llama3")
+    
+    # Intelligent Request
+    response = await node.request_generation(
+        provider_id=providers[0].id,
+        prompt="Synthesize a response for decentralized governance."
+    )
+    print(f"P2P Intelligence: {response['text']}")
+
+asyncio.run(main())
+```
+
+### Interactive Learning
+Check out our [Jupyter Guide](notebook/developing_with_p2p.ipynb) for a step-by-step walkthrough of the p2p architecture.
 
 ---
+
+## 🌐 FastAPI Integration
+Bee2Bee nodes now support a native **FastAPI** sidecar. This allows you to monitor your node health and peer list via standard HTTP requests:
+
+-   **Health Check**: `GET http://localhost:8000/`
+-   **Peers List**: `GET http://localhost:8000/peers`
+-   **Cloud Inference**: `POST http://localhost:8000/chat`
+
+---
+
+## 🤝 Community & Support
+- **Developer Support**: [+201211268396]
+- **Dashboard**: [Bee2Bee Live Map](https://chatit.cloud)
+
+Built with ❤️ by the ConnectIT Team for a decentralized future.
 
 ## 🚀 Quick Start Guide
 
