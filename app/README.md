@@ -1,7 +1,7 @@
-# Chatit.cloud
-### Decentralized Model Routing & Entrypoint
+# CohitHub.org
+### Decentralized Intelligence Hub & Model Routing
 
-Chatit.cloud is a minimalist web application designed to act as a secure entrypoint and router between private LLM models in a decentralized mesh network.
+CohitHub.org is a minimalist web application designed to act as a secure entrypoint and router between private LLM models in a decentralized mesh network.
 
 ## Features
 - **Minimalist Design**: Typography-first, high-end aesthetic inspired by modern SaaS platforms.

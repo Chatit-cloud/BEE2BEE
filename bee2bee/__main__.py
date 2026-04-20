@@ -70,7 +70,8 @@ def config(key, value):
 @click.option('--bootstrap-link', default=None, help='Bootstrap URL (default: from config)')
 @click.option('--remote/--local', default=False, help='Run model remotely via Hugging Face Inference API')
 @click.option('--token', default=None, help='Hugging Face Hub Token (required if remote)')
-def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link, remote, token):
+@click.option('--entrypoint', default=None, help='Cluster Entrypoint URL (e.g. https://chatit.cloud)')
+def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link, remote, token, entrypoint):
     """Deploy a Hugging Face text-generation service (local or remote) on the P2P network."""
     
     # Auto-resolve bootstrap
@@ -93,7 +94,8 @@ def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link, r
         model_name=model, 
         price_per_token=price_per_token,
         announce_host=public_host,
-        backend=backend
+        backend=backend,
+        entrypoint_url=entrypoint
     ))
 
 
@@ -103,7 +105,8 @@ def deploy_hf(model, price_per_token, host, port, public_host, bootstrap_link, r
 @click.option('--port', default=None, type=int, help='Bind port (default: random)')
 @click.option('--public-host', default=None, help='Publicly accessible IP/Hostname')
 @click.option('--bootstrap-link', default=None, help='Bootstrap URL (default: from config)')
-def serve_ollama(model, host, port, public_host, bootstrap_link):
+@click.option('--entrypoint', default=None, help='Cluster Entrypoint URL (e.g. https://chatit.cloud)')
+def serve_ollama(model, host, port, public_host, bootstrap_link, entrypoint):
     """Serve a local Ollama model on the P2P network."""
     
     # Auto-resolve bootstrap
@@ -121,7 +124,8 @@ def serve_ollama(model, host, port, public_host, bootstrap_link):
         model_name=model, 
         price_per_token=0.0, # Ollama usually free/local
         announce_host=public_host,
-        backend="ollama"
+        backend="ollama",
+        entrypoint_url=entrypoint
     ))
 
 

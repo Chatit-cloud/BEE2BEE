@@ -1,26 +1,37 @@
 import os
 import httpx
+from datetime import datetime, timezone
 from loguru import logger
 from typing import List, Optional
 
 class RegistryClient:
     """Handles communication with the central Supabase Node Registry."""
     
-    def __init__(self):
+    def __init__(self, entrypoint_url: Optional[str] = None):
+        # Direct Supabase Mode
         self.supabase_url = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
-        self.enabled = bool(self.supabase_url and self.supabase_key)
+        
+        # Cluster Entrypoint Mode (Remote Handshake)
+        self.entrypoint_url = entrypoint_url or os.getenv("BEE2BEE_ENTRYPOINT")
+        
+        self.enabled = bool((self.supabase_url and self.supabase_key) or self.entrypoint_url)
         
         if self.enabled:
-            self.api_url = f"{self.supabase_url.rstrip('/')}/rest/v1/active_nodes"
-            self.headers = {
-                "apikey": self.supabase_key,
-                "Authorization": f"Bearer {self.supabase_key}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates"
-            }
+            if self.supabase_url and self.supabase_key:
+                self.api_url = f"{self.supabase_url.rstrip('/')}/rest/v1/active_nodes"
+                self.headers = {
+                    "apikey": self.supabase_key,
+                    "Authorization": f"Bearer {self.supabase_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates"
+                }
+            else:
+                # Fallback to entrypoint relay (shakehand)
+                self.api_url = f"{self.entrypoint_url.rstrip('/')}/api/nodes/register"
+                self.headers = {"Content-Type": "application/json"}
         else:
-            logger.warning("Supabase credentials missing. Global registry sync disabled.")
+            logger.warning("No Registry Credentials. Node will run in Private/Offline mode.")
 
     async def sync_node(
         self, 
@@ -36,11 +47,11 @@ class RegistryClient:
             
         payload = {
             "peer_id": peer_id,
-            "address": address,
+            "addr": address,
             "models": models,
             "latency_ms": latency,
-            "tag": tag,
-            "last_seen": "now()"
+            "region": tag,
+            "last_seen": datetime.now(timezone.utc).isoformat()
         }
         
         try:

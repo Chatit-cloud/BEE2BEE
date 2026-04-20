@@ -30,13 +30,13 @@ console = Console(**console_kwargs)
 
 
 class P2PNode:
-    def __init__(self, host: str = "0.0.0.0", port: int = 4001, announce_host: Optional[str] = None, announce_port: Optional[int] = None):
+    def __init__(self, host: str = "0.0.0.0", port: int = 4001, announce_host: Optional[str] = None, announce_port: Optional[int] = None, entrypoint_url: Optional[str] = None):
         self.host = host
         self.port = port
         self.announce_host = announce_host
         self.announce_port = announce_port
         self.peer_id = new_id("peer")
-        self.registry = RegistryClient()
+        self.registry = RegistryClient(entrypoint_url=entrypoint_url)
         
         # We'll set self.addr after start() once we know the port
         self.addr = "" 
@@ -316,7 +316,17 @@ class P2PNode:
             ws = await connect(addr, max_size=32*1024*1024)
             logger.success(f"Connected to {addr}")
         except Exception as e:
-            raise IOError(f"Could not connect to {addr}: {e}")
+            # Smart Fallback: If wss failed due to SSL mismatch (common in local dev), try plain ws
+            if addr.startswith("wss://") and ("WRONG_VERSION_NUMBER" in str(e) or "connection was forcibly closed" in str(e).lower()):
+                fallback = addr.replace("wss://", "ws://")
+                logger.warning(f"SSL handshake failed for {addr}. Retrying with insecure {fallback}...")
+                try:
+                    ws = await connect(fallback, max_size=32*1024*1024)
+                    logger.success(f"Connected to {fallback} (Fallback Success)")
+                except Exception as e2:
+                    raise IOError(f"Could not connect to {addr} (or fallback {fallback}): {e2}")
+            else:
+                raise IOError(f"Could not connect to {addr}: {e}")
             
         pid = new_id("peer")  # Temporary until handshake
         
@@ -705,7 +715,8 @@ async def run_p2p_node(
     price_per_token: float = 0.0, 
     announce_host: str = None, 
     backend: str = "hf",
-    api_port: int = None
+    api_port: int = None,
+    entrypoint_url: str = None
 ):
     """Entry point for running a peer node with one or more models."""
     from .p2p import generate_join_link
@@ -713,7 +724,7 @@ async def run_p2p_node(
     console.print(f"\n[bold cyan]🚀 Starting P2P Node[/bold cyan]")
     console.print(f"[dim]Host: {host or '0.0.0.0'}, Port: {port or 0}, Announce: {announce_host}[/dim]")
     
-    node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host)
+    node = P2PNode(host=host or "0.0.0.0", port=port or 0, announce_host=announce_host, entrypoint_url=entrypoint_url)
     await node.start()
     
     # Start API if requested
