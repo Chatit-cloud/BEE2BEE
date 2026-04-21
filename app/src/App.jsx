@@ -304,8 +304,9 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
 };
 
 // --- Dashboard Component (Redesigned: Gemini B&W Style) ---
-const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }) => {
+const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNode, setManualNode, onNavigate, onSend }) => {
   const [input, setInput] = useState('');
+  const [showStats, setShowStats] = useState(false);
   const messagesEndRef = useRef(null);
   
   useEffect(() => { 
@@ -320,9 +321,42 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
 
   return (
     <div className="flex h-screen bg-white text-black font-sans selection:bg-black selection:text-white">
+      {/* Performance Overlay */}
+      {showStats && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-white/10 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className="bg-white border border-gray-100 shadow-2xl p-10 rounded-[40px] max-w-xl w-full space-y-8 relative">
+              <button onClick={() => setShowStats(false)} className="absolute top-8 right-8 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+              <div className="space-y-2">
+                 <h2 className="text-3xl font-light tracking-tight">Performance Metrics</h2>
+                 <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">Real-time Neural Analysis</p>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pool Size</span>
+                    <p className="text-2xl font-semibold mt-1">{networkStats.poolSize} Nodes</p>
+                 </div>
+                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Model</span>
+                    <p className="text-2xl font-semibold mt-1">{activeModel}</p>
+                 </div>
+                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 col-span-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Primary Ingress</span>
+                    <p className="text-sm font-mono mt-1 break-all">{networkStats.activeNode || 'Cloud Bridge Default'}</p>
+                 </div>
+              </div>
+              <div className="pt-4 flex items-center gap-3 text-emerald-500">
+                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                 <span className="text-[10px] font-bold uppercase tracking-widest">Neural Mesh Synchronized</span>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* Mini Sidebar */}
       <aside className="w-16 md:w-64 bg-white border-r border-gray-100 flex flex-col items-center md:items-stretch p-4 transition-all duration-300">
-        <div className="flex items-center gap-3 mb-12 mt-2 px-2">
+        <div className="flex items-center gap-3 mb-12 mt-2 px-2 cursor-pointer" onClick={() => onNavigate('landing')}>
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shrink-0">
              <Layers className="w-4 h-4 text-white" />
           </div>
@@ -342,23 +376,37 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, onSend }
               </div>
            </div>
 
-           <div className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
+           <div onClick={() => onNavigate('mesh')} className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
               <div className="flex items-center gap-3">
                  <Globe className="w-4 h-4 text-gray-400 group-hover:text-black" />
                  <span className="text-xs font-medium hidden md:block">Mesh Map</span>
               </div>
            </div>
            
-           <div className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
+           <div onClick={() => setShowStats(true)} className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
               <div className="flex items-center gap-3">
                  <Zap className="w-4 h-4 text-gray-400 group-hover:text-black" />
                  <span className="text-xs font-medium hidden md:block">Performance</span>
               </div>
            </div>
+           
+           {/* Manual Node Override */}
+           <div className="mt-6 md:block hidden">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Direct Ingress (Optional)</p>
+              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-xl border border-transparent focus-within:border-black/10 transition-all">
+                 <Terminal className="w-3 h-3 text-gray-400" />
+                 <input 
+                   value={manualNode} 
+                   onChange={e => setManualNode(e.target.value)}
+                   placeholder="IP:Port or URL..."
+                   className="bg-transparent text-[10px] w-full outline-none font-medium text-black placeholder:text-gray-300"
+                 />
+              </div>
+           </div>
         </div>
 
         <div className="mt-auto p-2">
-           <div className="w-full h-10 bg-gray-50 rounded-xl flex items-center justify-center cursor-pointer hover:bg-black group transition-all">
+           <div onClick={() => onNavigate('landing')} className="w-full h-10 bg-gray-50 rounded-xl flex items-center justify-center cursor-pointer hover:bg-black group transition-all">
               <Settings className="w-4 h-4 text-gray-400 group-hover:text-white" />
            </div>
         </div>
@@ -466,10 +514,11 @@ export default function App() {
   const [view, setView] = useState('landing');
   const [linkData, setLinkData] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [manualNode, setManualNode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
   const [meshData, setMeshData] = useState({});
-  const [selectedModel, setSelectedModel] = useState('llama3'); // Default
+  const [selectedModel, setSelectedModel] = useState('llama3');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -543,6 +592,9 @@ export default function App() {
       messages={messages} 
       isProcessing={isProcessing} 
       activeModel={selectedModel}
+      manualNode={manualNode}
+      setManualNode={setManualNode}
+      onNavigate={(v) => setView(v)}
       onSend={async (content) => {
           if (!content.trim() || isProcessing) return;
           setMessages(prev => [...prev, { role: 'user', text: content }]);
@@ -578,6 +630,13 @@ export default function App() {
               console.warn(`[Mesh] Cloud Bridge unreachable. Attempting Neural Direct-Link...`);
               
               const potentialHosts = [];
+              
+              // Priority 1: User's Manual Override
+              if (manualNode) {
+                 const [mHost, mPort] = manualNode.replace('http://', '').replace('https://', '').split(':');
+                 potentialHosts.push({ host: mHost, port: mPort || 8000, type: 'manual-override' });
+              }
+
               (networkStats.peers || []).forEach(peer => {
                 const port = peer.api_port || (peer.metrics && peer.metrics.api_port) || 8000;
                 const host = peer.api_host || peer.public_ip || (peer.addr ? peer.addr.replace('ws://', '').split(':')[0] : null);
