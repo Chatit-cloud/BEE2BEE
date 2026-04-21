@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "bee2bee"
-version = "3.5.16"
+version = "3.5.17"
 description = "Decentralized P2P network for AI model hosting and inference"
 authors = [{ name = "ConnectIT Team", email = "loaiabdalslam@gmail.com" }]
 readme = "README.md"
@@ -42,6 +42,10 @@ dependencies = [
 hf = [
   "transformers>=4.40",
   "datasets>=2.17",
+  "sentencepiece>=0.2.0",
+  "tiktoken>=0.7.0",
+  "protobuf>=3.20.0",
+  "gguf>=0.6.0"
 ]
 onnx = [
   "onnx>=1.14",
