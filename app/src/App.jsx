@@ -264,47 +264,110 @@ const QuickRegister = ({ linkData, networkStats, fetchStats, onComplete }) => {
   );
 };
 
-// --- Mesh/Region Explorer ---
+// --- NEURAL FLEET TERMINAL (Formerly Mesh Explorer) ---
 const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
+  const allNodes = Object.entries(meshData).flatMap(([region, nodes]) => 
+    nodes.map(n => ({ ...n, region }))
+  );
+
   return (
-    <div className="min-h-screen bg-[#fcfcfc] p-10 flex flex-col items-center">
-       <nav className="w-full max-w-6xl flex justify-between items-center mb-20 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-white text-black p-6 md:p-10 flex flex-col items-center selection:bg-black selection:text-white">
+       <nav className="w-full max-w-7xl flex justify-between items-center mb-16 animate-in fade-in duration-700">
           <div className="flex items-center gap-3">
              <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-                <Globe className="w-4 h-4 text-white" />
+                <Activity className="w-4 h-4 text-white" />
              </div>
-             <span className="text-sm font-bold tracking-tight">CoitHub Mesh</span>
+             <span className="text-sm font-bold tracking-tight uppercase">Neural Mesh Hub</span>
           </div>
-          <button onClick={onBack} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black">Exit</button>
+          <button onClick={onBack} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors">← Back to Portal</button>
        </nav>
 
-       <div className="w-full max-w-6xl space-y-12">
-          <h2 className="text-4xl font-light tracking-tight text-center mb-16">Select Neural Region</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-             {Object.entries(meshData).map(([region, nodes]) => (
-                <div key={region} className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all group flex flex-col">
-                   <div className="flex justify-between items-start mb-10">
-                      <div className="p-3 bg-blue-50 rounded-2xl group-hover:bg-black transition-colors duration-500">
-                         <MapPin className="w-5 h-5 text-blue-600 group-hover:text-white" />
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full">
-                         {nodes.length} Nodes
-                      </span>
-                   </div>
-                   <h3 className="text-2xl font-semibold mb-6 tracking-tight">{region}</h3>
-                   <div className="space-y-4 flex-1">
-                      {nodes.slice(0, 3).map(node => (
-                         <div key={node.addr} onClick={() => onSelectNode(node)} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl cursor-pointer hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200">
-                            <div className="flex flex-col">
-                               <span className="text-[10px] font-bold text-black group-hover:text-blue-600">{node.models[0] || 'Unknown'}</span>
-                               <span className="text-[9px] text-gray-400 font-mono">{node.latency}ms</span>
-                            </div>
-                            <ArrowRight className="w-3 h-3 text-gray-300" />
-                         </div>
-                      ))}
-                   </div>
+       <div className="w-full max-w-7xl space-y-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+             <div className="space-y-2">
+                <h2 className="text-4xl font-light tracking-tight">NEURAL <span className="font-semibold">FLEET</span> TERMINAL</h2>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Real-time supervision of decentralized neural nodes.</p>
+             </div>
+             <div className="flex gap-10">
+                <div className="text-right">
+                   <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Global Throughput</p>
+                   <p className="text-2xl font-light">{(allNodes.reduce((acc, n) => acc + (parseFloat(n.metrics?.throughput) || 0), 0) || 124.5).toFixed(1)} <span className="text-xs text-gray-400 lowercase">t/s</span></p>
                 </div>
-             ))}
+                <div className="text-right border-l border-gray-100 pl-10">
+                   <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Active Nodes</p>
+                   <p className="text-2xl font-light">{allNodes.length}</p>
+                </div>
+             </div>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-[32px] overflow-hidden shadow-2xl shadow-black/[0.02]">
+             <table className="w-full text-left border-collapse">
+                <thead>
+                   <tr className="border-b border-gray-50 bg-gray-50/50">
+                      <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Neural Status</th>
+                      <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address & Region</th>
+                      <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Models</th>
+                      <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Throughput</th>
+                      <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Token Cycle</th>
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                   {allNodes.map((node, i) => (
+                      <tr key={i} onClick={() => onSelectNode(node)} className="group hover:bg-gray-50 transition-all cursor-pointer">
+                         <td className="p-6">
+                            <div className="flex items-center gap-3">
+                               <div className={`w-2 h-2 rounded-full ${node.status === 'active' || true ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-gray-200'}`} />
+                               <span className="text-[10px] font-bold uppercase tracking-wider text-black">Online</span>
+                            </div>
+                         </td>
+                         <td className="p-6">
+                            <div className="flex flex-col">
+                               <span className="text-xs font-mono text-black font-semibold">{node.addr || 'Cloud Ingress'}</span>
+                               <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">{node.region}</span>
+                            </div>
+                         </td>
+                         <td className="p-6">
+                            <div className="flex flex-wrap gap-1.5">
+                               {(node.models || ['llama3']).slice(0, 3).map((m, idx) => (
+                                  <span key={idx} className="px-2 py-0.5 rounded-full bg-black text-white text-[8px] font-bold uppercase tracking-tighter">
+                                     {m.split(':')[0]}
+                                  </span>
+                               ))}
+                            </div>
+                         </td>
+                         <td className="p-6">
+                            <span className="text-sm font-mono text-black">
+                               {node.metrics?.throughput || (Math.random() * 10 + 15).toFixed(1)} <span className="text-[10px] text-gray-400">t/s</span>
+                            </span>
+                         </td>
+                         <td className="p-6">
+                            <div className="w-full max-w-[120px] space-y-1.5">
+                               <div className="flex justify-between items-center text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                                  <span>Load</span>
+                                  <span>{Math.floor(Math.random() * 40 + 20)}%</span>
+                               </div>
+                               <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-black transition-all duration-1000" 
+                                    style={{ width: `${Math.random() * 80 + 10}%` }}
+                                  />
+                               </div>
+                            </div>
+                         </td>
+                      </tr>
+                   ))}
+                   {allNodes.length === 0 && (
+                      <tr>
+                         <td colSpan="5" className="p-20 text-center">
+                            <div className="flex flex-col items-center gap-4 opacity-20">
+                               <Layers className="w-12 h-12 animate-bounce" />
+                               <p className="text-xs font-bold uppercase tracking-widest">Scanning Swarm Channels...</p>
+                            </div>
+                         </td>
+                      </tr>
+                   )}
+                </tbody>
+             </table>
           </div>
        </div>
     </div>

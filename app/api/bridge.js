@@ -66,14 +66,18 @@ export class DynamicCoitHubBridge {
                 console.log(`[Mesh] ✅ Connected to: ${this.activeUrl}`);
                 this.stats.activeNode = this.activeUrl;
                 
-                // Immediate metadata injection for the registered node to avoid zero-state
+                // Immediate metadata injection and Registry Sync
                 const nodeAddr = this.activeUrl.replace('ws://', '').replace('wss://', '');
-                this._updatePeerMetadata(this.activeUrl, {
+                const initialMeta = {
                     peer_id: nodeAddr.split(':')[0],
                     region: 'Auto-Joined',
                     status: 'active',
                     metrics: { throughput: 0, trust_score: 0.99 }
-                });
+                };
+                this._updatePeerMetadata(this.activeUrl, initialMeta);
+                
+                // Sync to Database if active
+                await this.pushNodeToRegistry(this.activeUrl, initialMeta);
 
                 return;
             } catch (e) {
@@ -89,6 +93,36 @@ export class DynamicCoitHubBridge {
 
         // All nodes failed, retry after delay
         setTimeout(() => this.connect(), 5000);
+    }
+
+    async pushNodeToRegistry(addr, meta) {
+        const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        
+        if (!sbUrl || !sbKey) return;
+
+        try {
+            console.log(`[Mesh] Pushing Active Node to Registry: ${addr}`);
+            await fetch(`${sbUrl}/rest/v1/active_nodes`, {
+                method: 'POST',
+                headers: { 
+                    "apikey": sbKey, 
+                    "Authorization": `Bearer ${sbKey}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates"
+                },
+                body: JSON.stringify({
+                    peer_id: meta.peer_id || addr.split('://')[1],
+                    addr: addr,
+                    region: meta.region || 'Global',
+                    models: meta.models || [],
+                    last_seen: new Date().toISOString(),
+                    metrics: meta.metrics || { status: 'active' }
+                })
+            });
+        } catch (e) {
+            console.error('[Mesh] Registry Push Error:', e.message);
+        }
     }
 
     async syncGlobalMesh() {
@@ -137,18 +171,31 @@ export class DynamicCoitHubBridge {
                     msg.peers.forEach(p => {
                         this.nodes.add(p.addr);
                         this._updatePeerMetadata(p.addr, p);
+                        // Register active nodes in Supabase
+                        if (p.status === 'active' || p.is_ingress) {
+                            this.pushNodeToRegistry(p.addr, p);
+                        }
+                    });
+                }
+
+                if (msg.type === 'hello' || msg.type === 'handshake') {
+                    console.log(`[Mesh] Identity Handshake: ${this.activeUrl}`);
+                    this._updatePeerMetadata(this.activeUrl, msg);
+                    this.pushNodeToRegistry(this.activeUrl, {
+                        ...msg,
+                        last_seen: new Date().toISOString()
                     });
                 }
 
                 if (msg.type === 'gen_response' && this.pendingRequests.has(msg.rid)) {
-                    const { resolve } = this.pendingRequests.get(msg.rid);
+                    const pending = this.pendingRequests.get(msg.rid);
                     this.pendingRequests.delete(msg.rid);
-                    resolve({
+                    pending.resolve({
                         text: msg.text,
                         rid: msg.rid,
                         metadata: { 
                             trust_score: msg.trust_score || 0.99,
-                            latency: Date.now() - (this.pendingRequests.get(msg.rid)?.ts || Date.now()),
+                            latency: Date.now() - (pending.ts || Date.now()),
                             backend: msg.backend
                         }
                     });
