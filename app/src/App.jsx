@@ -454,9 +454,13 @@ const QuickRegister = ({ linkData, networkStats, fetchStats, onComplete }) => {
 
 // --- NEURAL FLEET TERMINAL (Formerly Mesh Explorer) ---
 const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
+  const [filterRegion, setFilterRegion] = useState('All');
+  
   const allNodes = Object.entries(meshData).flatMap(([region, nodes]) => 
     nodes.map(n => ({ ...n, region }))
-  );
+  ).filter(n => filterRegion === 'All' || n.region === filterRegion);
+
+  const uniqueRegions = ['All', ...new Set(Object.keys(meshData))];
 
   return (
     <div className="min-h-screen bg-white text-black p-6 md:p-10 flex flex-col items-center selection:bg-black selection:text-white">
@@ -472,10 +476,29 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
 
        <div className="w-full max-w-7xl space-y-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-             <div className="space-y-2">
-                <h2 className="text-4xl font-light tracking-tight">ACTIVE <span className="font-semibold">NODES</span> TERMINAL</h2>
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Real-time supervision of decentralized neural nodes.</p>
+             <div className="space-y-4">
+                <div className="space-y-2">
+                   <h2 className="text-4xl font-light tracking-tight">ACTIVE <span className="font-semibold">NODES</span> TERMINAL</h2>
+                   <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Real-time supervision of decentralized neural nodes.</p>
+                </div>
+                
+                {/* Region Filter */}
+                <div className="flex items-center gap-2">
+                   <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Filter Region:</span>
+                   <div className="flex flex-wrap gap-2">
+                      {uniqueRegions.map(reg => (
+                         <button 
+                           key={reg}
+                           onClick={() => setFilterRegion(reg)}
+                           className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase transition-all ${filterRegion === reg ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                         >
+                            {reg}
+                         </button>
+                      ))}
+                   </div>
+                </div>
              </div>
+             
              <div className="flex gap-10">
                 <div className="text-right">
                    <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Global Throughput</p>
