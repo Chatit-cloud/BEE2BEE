@@ -609,6 +609,33 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
                     <p className="text-sm font-mono mt-1 break-all">{networkStats.activeNode || 'Cloud Bridge Default'}</p>
                  </div>
               </div>
+              <div className="space-y-4 pt-4 border-t border-gray-100">
+                 <div className="space-y-2">
+                    <div className="flex justify-between items-center px-1">
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dynamic Output Limit (Tokens)</span>
+                       <span className="text-xs font-mono font-bold">{genSettings.maxTokens}</span>
+                    </div>
+                    <input 
+                      type="range" min="128" max="4096" step="128"
+                      value={genSettings.maxTokens}
+                      onChange={e => setGenSettings({...genSettings, maxTokens: parseInt(e.target.value)})}
+                      className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-black"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <div className="flex justify-between items-center px-1">
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Neural Temperature</span>
+                       <span className="text-xs font-mono font-bold">{genSettings.temperature}</span>
+                    </div>
+                    <input 
+                      type="range" min="0" max="2" step="0.1"
+                      value={genSettings.temperature}
+                      onChange={e => setGenSettings({...genSettings, temperature: parseFloat(e.target.value)})}
+                      className="w-full h-1 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-black"
+                    />
+                 </div>
+              </div>
+
               <div className="pt-4 flex items-center gap-3 text-emerald-500">
                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                  <span className="text-[10px] font-bold uppercase tracking-widest">Neural Mesh Synchronized</span>
@@ -787,6 +814,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('llama3');
   const [tokenConsumption, setTokenConsumption] = useState(0);
   const [globalStats, setGlobalStats] = useState({ visits: 0, chats: 0, tokens: 0 });
+  const [genSettings, setGenSettings] = useState({ maxTokens: 2048, temperature: 0.7 });
 
   useEffect(() => {
     fetch('/api/p2p/global_metrics', {
@@ -930,7 +958,8 @@ export default function App() {
               prompt: content, 
               model: selectedModel, 
               stream: true, 
-              max_new_tokens: 2048,
+              max_tokens: genSettings.maxTokens,
+              temperature: genSettings.temperature,
               targetNode: manualNode // Pass the dynamic node to the bridge
             };
             let response;

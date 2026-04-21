@@ -43,28 +43,58 @@ def generate_text(model, tokenizer, device: str, prompt: str, max_new_tokens: in
         out = model.generate(**inputs, **gen_kwargs)
     return tokenizer.decode(out[0], skip_special_tokens=True)
 
-def generate_text_stream(model, tokenizer, device: str, prompt: str, max_new_tokens: int = 32, temperature: float = 0.7):
-    import torch  # type: ignore
+def generate_text_stream(model, tokenizer, device: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7):
+    import torch # type: ignore
+    from queue import Queue
     from threading import Thread
     from transformers import TextIteratorStreamer
+
+    # 1. Prepare chat template if possible
+    # We expect prompt to be a string or we can try to parse it if it looks like a conversation
+    messages = []
+    if "\nuser: " in prompt or prompt.startswith("user: "):
+        parts = prompt.split("\n")
+        for p in parts:
+            if p.startswith("user: "): messages.append({"role": "user", "content": p[6:]})
+            elif p.startswith("assistant: "): messages.append({"role": "assistant", "content": p[11:]})
     
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    if messages and hasattr(tokenizer, 'apply_chat_template'):
+        try:
+            formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer(formatted_prompt, return_tensors="pt").to(device)
+        except:
+            inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    else:
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+    # 2. Use TextIteratorStreamer with specific delta-focused settings
+    # skip_prompt=True is essential to avoid "re-writing from start"
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     
     gen_kwargs = {
+        **inputs,
         "max_new_tokens": max_new_tokens,
         "streamer": streamer,
-        **inputs
+        "repetition_penalty": 1.15, # Prevent infinite loops
+        "pad_token_id": tokenizer.eos_token_id
     }
+    
     if temperature > 0:
         gen_kwargs["temperature"] = temperature
         gen_kwargs["do_sample"] = True
+        gen_kwargs["top_p"] = 0.9
+    else:
+        gen_kwargs["do_sample"] = False
         
     thread = Thread(target=model.generate, kwargs=gen_kwargs)
     thread.start()
     
+    # 3. Yield only non-empty deltas
     for new_text in streamer:
-        yield new_text
+        if new_text:
+            # Gemma/Llama models sometimes yield a leading space or special char in the first chunk
+            # We strip it if it's the very first part of a turn if needed, but usually streamer handles it
+            yield new_text
 
 
 def export_torchscript(model, example_inputs) -> Any:

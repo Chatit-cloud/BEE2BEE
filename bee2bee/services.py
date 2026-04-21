@@ -25,7 +25,7 @@ class BaseService:
         raise NotImplementedError
 
 class HFService(BaseService):
-    def __init__(self, model_name: str, price_per_token: float, max_new_tokens: int = 32):
+    def __init__(self, model_name: str, price_per_token: float, max_new_tokens: int = 2048):
         super().__init__("hf")
         self.model_name = model_name
         self.price_per_token = price_per_token
