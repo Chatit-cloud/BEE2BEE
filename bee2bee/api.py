@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, Header
+from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import List, Optional
@@ -191,7 +192,16 @@ async def chat(req: ChatRequest):
                     continue
                     
                 # Execute locally
-                logger.info(f"Local execution trigger: {svc_name} for model {req.model or 'default'}")
+                logger.info(f"Local execution trigger: {svc_name} for model {req.model or 'default'} (Stream: {req.stream})")
+                
+                if req.stream:
+                    gen = svc.execute_stream({
+                        "prompt": req.prompt,
+                        "max_new_tokens": req.max_new_tokens or 2048,
+                        "temperature": req.temperature or 0.7
+                    })
+                    return StreamingResponse(gen, media_type="text/plain")
+
                 result = svc.execute({
                     "prompt": req.prompt,
                     "max_new_tokens": req.max_new_tokens or 2048,

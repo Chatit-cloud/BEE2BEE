@@ -20,6 +20,10 @@ class BaseService:
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError
 
+    def execute_stream(self, params: Dict[str, Any]):
+        """Returns a generator for streaming responses."""
+        raise NotImplementedError
+
 class HFService(BaseService):
     def __init__(self, model_name: str, price_per_token: float, max_new_tokens: int = 32):
         super().__init__("hf")
@@ -176,6 +180,45 @@ class OllamaService(BaseService):
             }
         except Exception as e:
             raise ServiceError(f"Ollama Exec Error: {e}")
+
+    def execute_stream(self, params: Dict[str, Any]):
+        import requests
+        import json
+        prompt = params.get("prompt")
+        target_model = getattr(self, 'actual_model', self.model_name)
+        
+        payload = {
+            "model": target_model,
+            "prompt": prompt,
+            "stream": True,
+            "options": {
+                "num_predict": int(params.get("max_new_tokens", 2048)),
+                "temperature": float(params.get("temperature", 0.7))
+            }
+        }
+        
+        try:
+            res = requests.post(f"{self.host}/api/generate", json=payload, stream=True, timeout=300)
+            if res.status_code != 200:
+                yield json.dumps({"error": f"Ollama Error: {res.text}"})
+                return
+
+            for line in res.iter_lines():
+                if line:
+                    decoded = line.decode('utf-8')
+                    try:
+                        data = json.loads(decoded)
+                        # Yield the specific chunk of text
+                        chunk = data.get("response", "")
+                        if chunk:
+                            yield chunk
+                        
+                        if data.get("done"):
+                            break
+                    except:
+                        continue
+        except Exception as e:
+            yield json.dumps({"error": str(e)})
 
 class HFRemoteService(BaseService):
     def __init__(self, model_name: str, token: Optional[str] = None, price_per_token: float = 0.005):

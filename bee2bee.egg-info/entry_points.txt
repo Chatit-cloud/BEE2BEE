@@ -1,0 +1,2 @@
+[console_scripts]
+bee2bee = bee2bee.__main__:cli

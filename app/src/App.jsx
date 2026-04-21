@@ -543,103 +543,96 @@ export default function App() {
       messages={messages} 
       isProcessing={isProcessing} 
       activeModel={selectedModel}
-onSend={async (content) => {
+      onSend={async (content) => {
           if (!content.trim() || isProcessing) return;
           setMessages(prev => [...prev, { role: 'user', text: content }]);
           setIsProcessing(true);
-          try {
-            const payload = { task: { prompt: content, model: selectedModel } };
-        let response;
-        try {
-            response = await fetch('/api/p2p/generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-        } catch (e) {
-            console.warn("[Mesh] Network error reaching cloud bridge:", e.message);
-            // Fallthrough to direct link logic
-        }
+          
+          // Initial empty AI message for streaming
+          const messageId = Date.now();
+          setMessages(prev => [...prev, { role: 'ai', text: '', id: messageId, metadata: { streaming: true } }]);
 
-        if (!response || !response.ok) {
-            console.warn(`[Mesh] Cloud Bridge unreachable (Status: ${response?.status || 'network-error'}). Attempting Neural Direct-Link...`);
+          let accumulatedText = "";
+          const updateAIMessage = (text, metadata = {}) => {
+            accumulatedText = text;
+            setMessages(prev => prev.map(msg => 
+              msg.id === messageId ? { ...msg, text: text, metadata: { ...msg.metadata, ...metadata } } : msg
+            ));
+          };
+
+          try {
+            const payload = { prompt: content, model: selectedModel, stream: true, max_new_tokens: 2048 };
+            let response;
             
-            let directSuccess = false;
-            
-            // Collect all potential targets from the entire peer pool
-            const potentialHosts = [];
-            
-            // 1. Collect all potential targets from the official peer pool
-            (networkStats.peers || []).forEach(peer => {
+            try {
+              response = await fetch('/api/p2p/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+            } catch (e) {
+              console.warn("[Mesh] Cloud bridge network error:", e.message);
+            }
+
+            if (!response || !response.ok) {
+              console.warn(`[Mesh] Cloud Bridge unreachable. Attempting Neural Direct-Link...`);
+              
+              const potentialHosts = [];
+              (networkStats.peers || []).forEach(peer => {
                 const port = peer.api_port || (peer.metrics && peer.metrics.api_port) || 8000;
                 const host = peer.api_host || peer.public_ip || (peer.addr ? peer.addr.replace('ws://', '').split(':')[0] : null);
-                
-                if (host) {
-                    potentialHosts.push({ host, port, type: 'remote-peer' });
-                }
-            });
+                if (host) potentialHosts.push({ host, port });
+              });
 
-            // 2. Discover all distinct API ports currently active in the mesh for local fallback
-            const meshPorts = new Set([3333, 8000, 4001]); // Standard defaults
-            (networkStats.peers || []).forEach(p => {
-                const pPort = p.api_port || (p.metrics && p.metrics.api_port);
-                if (pPort) meshPorts.add(Number(pPort));
-            });
+              // Local fallbacks
+              [3333, 8000].forEach(port => potentialHosts.push({ host: 'localhost', port }));
 
-            // 3. Add dynamic localhost fallbacks based on mesh activity
-            Array.from(meshPorts).forEach(port => {
-                potentialHosts.push({ host: 'localhost', port, type: 'local-dynamic' });
-            });
-
-            console.log(`[Mesh] Attempting Direct-Link across ${potentialHosts.length} targets...`);
-
-            for (const { host, port, type } of potentialHosts) {
+              let directSuccess = false;
+              for (const { host, port } of potentialHosts) {
                 if (directSuccess) break;
                 try {
-                    const url = `http://${host}:${port}/generate`;
-                    console.log(`[Mesh] Trying ${type}: ${url}`);
-                    
-                    const localResp = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            prompt: content, 
-                            model: selectedModel,
-                            max_new_tokens: 2048,
-                            temperature: 0.7
-                        })
-                    });
+                  const url = `http://${host}:${port}/generate`;
+                  const localResp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                  });
 
-                    if (localResp.ok) {
-                        const localData = await localResp.json();
-                        setMessages(prev => [...prev, { 
-                            role: 'ai', 
-                            text: localData.text || localData.response || "Inference Success.", 
-                            metadata: { ...localData.metadata, mode: 'direct-ingress', host, port } 
-                        }]);
-                        directSuccess = true;
+                  if (localResp.ok) {
+                    const reader = localResp.body.getReader();
+                    const decoder = new TextDecoder();
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      const chunk = decoder.decode(value, { stream: true });
+                      updateAIMessage(accumulatedText + chunk, { mode: 'direct-link', host });
                     }
-                } catch (err) {
-                    console.log(`[Mesh] ${host}:${port} unavailable:`, err.message);
-                }
-            }
-            
-            if (directSuccess) return;
-            
-            setMessages(prev => [...prev, { 
-                role: 'ai', 
-                text: `Consensus Timeout (Cloud) & Direct-Link failed. Make sure your local node is running with:\npython -m bee2bee serve-ollama --model ${selectedModel}`, 
-                metadata: { error: true } 
-            }]);
+                    directSuccess = true;
+                  }
+                } catch (err) { /* silent retry */ }
+              }
+
+              if (!directSuccess) {
+                updateAIMessage("Mesh connection lost. Ensure your node is active.");
+              }
             } else {
-                const data = await response.json();
-                setMessages(prev => [...prev, { role: 'ai', text: data.text || "Consensus failed (No Response).", metadata: data.metadata }]);
+              // Handle Cloud Stream
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder();
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                updateAIMessage(accumulatedText + chunk, { mode: 'cloud-bridge' });
+              }
             }
-          } catch (err) { 
-            console.error("[Mesh] Request failed:", err);
-            setMessages(prev => [...prev, { role: 'ai', text: "Bridge Offline. Is your node running?", metadata: { trust_score: 0 } }]); 
-          } finally { setIsProcessing(false); }
-      }}
+          } catch (err) {
+            console.error("[Mesh] Fatal Error:", err);
+            updateAIMessage("Neural path disrupted.");
+          } finally {
+            setIsProcessing(false);
+          }
+        }}
     />
   );
 }
