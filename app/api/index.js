@@ -143,17 +143,20 @@ app.get('/api/p2p/global_metrics', async (req, res) => {
         const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
         if (!sbUrl || !sbKey) return res.json({ visits: 0, chats: 0, tokens: 0 });
         
-        const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS`, {
+        const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS&select=metrics`, {
             headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` }
         });
-        const data = await resp.json();
-        if (data && data.length > 0 && data[0].metrics) {
-            res.json(data[0].metrics);
-        } else {
-            res.json({ visits: 0, chats: 0, tokens: 0 });
+        
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.length > 0 && data[0].metrics) {
+                return res.json(data[0].metrics);
+            }
         }
+        res.json({ visits: 0, chats: 0, tokens: 0 });
     } catch(e) {
-        res.status(500).json({ error: e.message });
+        console.error('[Metrics] GET Error:', e.message);
+        res.json({ visits: 0, chats: 0, tokens: 0 });
     }
 });
 
@@ -164,18 +167,24 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
         const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
         if (!sbUrl || !sbKey) return res.json({ visits: 0, chats: 0, tokens: 0 });
         
-        const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS`, {
+        // 1. Fetch current
+        const fetchResp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS&select=metrics`, {
             headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` }
         });
-        const data = await resp.json();
+        
         let current = { visits: 0, chats: 0, tokens: 0 };
-        if (data && data.length > 0 && data[0].metrics) current = data[0].metrics;
+        if (fetchResp.ok) {
+            const data = await fetchResp.json();
+            if (data && data.length > 0 && data[0].metrics) current = data[0].metrics;
+        }
 
-        current.visits = (current.visits || 0) + visits;
-        current.chats = (current.chats || 0) + chats;
-        current.tokens = (current.tokens || 0) + tokens;
+        // 2. Increment safely
+        current.visits = (parseInt(current.visits) || 0) + (parseInt(visits) || 0);
+        current.chats = (parseInt(current.chats) || 0) + (parseInt(chats) || 0);
+        current.tokens = (parseInt(current.tokens) || 0) + (parseInt(tokens) || 0);
 
-        await fetch(`${sbUrl}/rest/v1/active_nodes`, {
+        // 3. Upsert back to Supabase
+        const updateResp = await fetch(`${sbUrl}/rest/v1/active_nodes`, {
             method: 'POST',
             headers: { 
                 "apikey": sbKey, 
@@ -185,16 +194,21 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
             },
             body: JSON.stringify({
                 peer_id: 'GLOBAL_METRICS',
-                addr: 'global.bee2bee.network',
-                region: 'Global',
-                models: [],
+                addr: 'global.coithub.org',
+                region: 'Global-Network',
                 last_seen: new Date().toISOString(),
                 metrics: current
             })
         });
 
+        if (!updateResp.ok) {
+            const err = await updateResp.text();
+            console.error(`[Metrics] Supabase Sync Fail (${updateResp.status}):`, err);
+        }
+
         res.json(current);
     } catch(e) {
+        console.error('[Metrics] POST Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -202,14 +216,18 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
 app.post('/api/subscribe', async (req, res) => {
     try {
         const { email } = req.body;
-        if (!email) return res.status(400).json({ error: 'Email required' });
+        if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required' });
         
         const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
         const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-        if (!sbUrl || !sbKey) return res.json({ success: true });
+
+        if (!sbUrl || !sbKey) {
+            console.error('[Subscribe] Missing Supabase Credentials');
+            return res.json({ success: true, warning: 'local-mode' });
+        }
 
         // Using active_nodes as a generic key-value store to avoid schema changes
-        await fetch(`${sbUrl}/rest/v1/active_nodes`, {
+        const subResp = await fetch(`${sbUrl}/rest/v1/active_nodes`, {
             method: 'POST',
             headers: { 
                 "apikey": sbKey, 
@@ -218,17 +236,25 @@ app.post('/api/subscribe', async (req, res) => {
                 "Prefer": "resolution=merge-duplicates"
             },
             body: JSON.stringify({
-                peer_id: `SUB_${email.replace(/[^a-zA-Z0-9@.-]/g, '')}`,
+                peer_id: `SUB_${email.replace(/[^a-zA-Z0-9]/g, '_')}`.toUpperCase().substring(0, 60),
                 addr: email,
-                region: 'Subscriber',
-                models: ['changelog-subscriber'],
+                region: 'CH-LEAD',
+                models: ['subscriber-v1'],
                 last_seen: new Date().toISOString(),
-                metrics: { email }
+                metrics: { email, source: 'landing_landing_v1' }
             })
         });
 
+        if (!subResp.ok) {
+            const errLog = await subResp.text();
+            console.error(`[Subscribe] Supabase Error: ${subResp.status} - ${errLog}`);
+            throw new Error("Registry Unavailable");
+        }
+
+        console.log(`[Mesh] New Subscriber Registered: ${email}`);
         res.json({ success: true });
     } catch(e) {
+        console.error('[Subscribe] Critical Failure:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

@@ -391,7 +391,11 @@ export class DynamicCoitHubBridge {
             await this.pushNodeToRegistry(bootstrapUrl, { 
                 model: url.searchParams.get('model') || 'gemma3:270m',
                 region: url.searchParams.get('region') || 'Global',
-                metrics: { api_port: parseInt(apiPort || '3333'), status: 'active' }
+                metrics: { 
+                    api_port: parseInt(apiPort || '3333'), 
+                    status: 'active',
+                    join_link: link // Persist the original connection string for cross-node use
+                }
             });
 
             await this.connect();

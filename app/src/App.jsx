@@ -5,6 +5,14 @@ import {
   Terminal, Shield, Layers, Activity,
   ArrowRight, Database, Users, Info, X
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
+import remarkMath from 'remark-math';
+import 'highlight.js/styles/github.css';
+import 'katex/dist/katex.min.css';
+
 
 // --- Core Globe ---
 const NeuralMap = ({ peers }) => {
@@ -149,17 +157,29 @@ const AnimatedTerminal = () => {
 const Landing = ({ onStart, networkStats, globalStats }) => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [subError, setSubError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubscribe = async () => {
-    if (!email) return;
+    if (!email || !email.includes('@')) return;
+    setLoading(true);
+    setSubError(false);
     try {
-      await fetch('/api/subscribe', {
+      const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       });
-      setSubscribed(true);
-    } catch { alert("Subscription error"); }
+      if (res.ok) {
+        setSubscribed(true);
+      } else {
+        setSubError(true);
+      }
+    } catch { 
+      setSubError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -185,17 +205,25 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
 
           <div className="flex flex-col items-center gap-3">
             {subscribed ? (
-              <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-full">✓ Subscribed for Updates</span>
+              <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-full animate-in fade-in zoom-in duration-300">✓ Subscribed for Updates</span>
             ) : (
-              <div className="flex items-center gap-2 p-1.5 pl-5 bg-white border border-gray-100 rounded-full shadow-lg hover:shadow-xl transition-all focus-within:ring-2 focus-within:ring-blue-100">
-                <input
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="Email for changelog..."
-                  className="bg-transparent border-none outline-none text-xs w-48 font-medium"
-                />
-                <button onClick={handleSubscribe} className="bg-gray-50 text-gray-400 hover:text-black p-2 rounded-full transition-colors">
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+              <div className="flex flex-col items-center gap-2">
+                <div className={`flex items-center gap-2 p-1.5 pl-5 bg-white border ${subError ? 'border-red-200 shadow-red-500/5' : 'border-gray-100'} rounded-full shadow-lg hover:shadow-xl transition-all focus-within:ring-2 focus-within:ring-blue-100`}>
+                  <input
+                    value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder={subError ? "Try another email..." : "Email for changelog..."}
+                    disabled={loading}
+                    className="bg-transparent border-none outline-none text-xs w-48 font-medium"
+                  />
+                  <button 
+                    onClick={handleSubscribe} 
+                    disabled={loading}
+                    className={`${loading ? 'animate-pulse cursor-not-allowed' : 'hover:text-black'} bg-gray-50 text-gray-400 p-2 rounded-full transition-colors`}
+                  >
+                    {loading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                  </button>
+                </div>
+                {subError && <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest animate-pulse">Registry Timeout. Try again.</span>}
               </div>
             )}
           </div>
@@ -765,10 +793,36 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
                       <Cpu className="w-4 h-4 text-white" />
                     </div>
                   )}
-                  <div className={`space-y-1 ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-                    <p className={`text-[15px] leading-relaxed font-normal whitespace-pre-wrap ${m.role === 'user' ? 'bg-gray-100 py-3 px-5 rounded-[24px] rounded-tr-none text-black' : 'text-black py-1'}`}>
-                      {m.text}
-                    </p>
+                  <div className={`w-full ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
+                    {m.role === 'user' ? (
+                      <p className="text-[15px] leading-relaxed font-normal whitespace-pre-wrap bg-gray-100 py-3 px-5 rounded-[24px] rounded-tr-none text-black inline-block text-left">
+                        {m.text}
+                      </p>
+                    ) : (
+                      <div className="prose-minimal w-full overflow-hidden">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeHighlight, rehypeKatex]}
+                          components={{
+                            // Ensure code blocks are styled correctly
+                            code({ node, inline, className, children, ...props }) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return !inline ? (
+                                <pre className={className} {...props}>
+                                  <code className={className}>{children}</code>
+                                </pre>
+                              ) : (
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
+                          {m.text}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                     {m.metadata && (
                       <div className="flex items-center gap-3 mt-4 opacity-30 group-hover:opacity-100 transition-opacity">
                         <span className="text-[8px] font-bold uppercase tracking-widest">{m.metadata.neural_path || 'Cloud'}</span>
@@ -897,10 +951,24 @@ export default function App() {
           setView('quick-register');
         }
       } catch (e) {
-        console.error("Routing Error:", e);
-      }
     }
   }, []);
+
+  // 1.5 Auto-Select Active Node from Swarm
+  useEffect(() => {
+    if (view === 'dashboard' && !manualNode && networkStats.peers.length > 0) {
+      // Find nodes that have an API port and are marked as active
+      const available = networkStats.peers.filter(p => 
+        (p.metrics?.api_port || p.api_port) && 
+        (p.status === 'active' || p.metrics?.status === 'active')
+      );
+      
+      if (available.length > 0) {
+        console.log("[Mesh] Auto-selecting target node from swarm list...");
+        handleSelectNode(available[0]);
+      }
+    }
+  }, [networkStats.peers, manualNode, view]);
 
   // 2. Real Status Tracking (Every 60s via Secure Proxy)
   const fetchStats = async () => {
@@ -944,11 +1012,27 @@ export default function App() {
   }, [manualNode]);
 
   const handleSelectNode = (node) => {
+    // Resolve Host/IP from various metadata fields
+    let host = node.addr?.split('://')[1]?.split(':')[0] || node.public_ip || node.addr?.split(':')[0];
+    if (host === 'localhost' || host === '127.0.0.1') host = window.location.hostname; // Smart fallback
+    
+    const port = node.metrics?.api_port || 3333;
+    const apiUrl = `http://${host}:${port}`;
+
+    setManualNode(apiUrl); 
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);
+
     setMessages([{
       role: 'ai',
-      text: `Link established. Regional cluster: ${node.region}. Neural path: ${node.addr}. Ready for ${node.models[0] || 'inference'}.`,
-      metadata: { neural_path: node.addr, latency_ms: node.latency }
+      text: `### 🔗 Neural Link Established
+The decentralized path to the **${node.region}** cluster is now active.
+      
+- **Neural Path**: \`${apiUrl}\`
+- **Identity**: \`${node.peer_id || 'anonymous'}\`
+- **Target**: \`${node.models?.[0] || 'inference'}\`
+
+Status: *Synchronized*`,
+      metadata: { neural_path: apiUrl, mode: 'mesh-ingress', latency: node.latency }
     }]);
     setView('dashboard');
   };
@@ -977,6 +1061,7 @@ export default function App() {
         setMessages(prev => [...prev, { role: 'ai', text: '', id: messageId, metadata: { streaming: true } }]);
 
         let accumulatedText = "";
+        let lastEstimated = 0;
         const updateAIMessage = (text, metadata = {}) => {
           accumulatedText = text;
           setMessages(prev => prev.map(msg =>
@@ -1028,39 +1113,40 @@ export default function App() {
                 try {
                   const data = JSON.parse(line);
                   if (data.status === 'error') throw new Error(data.message);
-                  if (data.done) {
-                    break; // End of neural flow
-                  }
-                  accumulatedText += data.text || data.response || "";
+                  if (data.done) break;
+                  
+                  const delta = data.text || data.response || "";
+                  accumulatedText += delta;
                 } catch (e) {
                   if (!line.includes('{"')) accumulatedText += line + "\n";
                 }
               }
 
+              const estimatedTokens = Math.max(1, Math.ceil(accumulatedText.length / 4));
+              const tokenDelta = estimatedTokens - lastEstimated;
+              if (tokenDelta > 0) {
+                setTokenConsumption(prev => prev + tokenDelta);
+                setGlobalStats(prev => ({ ...prev, tokens: prev.tokens + tokenDelta }));
+                lastEstimated = estimatedTokens;
+              }
+              
               updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
             }
 
-            // Final flush and state update
-            if (buffer.trim()) {
-              try {
-                const data = JSON.parse(buffer);
-                if (!data.done) accumulatedText += data.text || data.response || "";
-              } catch (e) {
-                if (!buffer.includes('{"')) accumulatedText += buffer;
-              }
-            }
-
-            setTokenConsumption(prev => prev + Math.max(1, Math.ceil(accumulatedText.length / 4)));
             updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
 
-            // Stream finished, update global stats
+            // Stream finished, finalize local consumption and update global stats
+            const finalTokens = Math.ceil(accumulatedText.length / 4);
+            
             fetch('/api/p2p/global_metrics', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chats: 1, tokens: Math.ceil(accumulatedText.length / 4) })
+              body: JSON.stringify({ chats: 1, tokens: finalTokens })
             })
               .then(r => r.json())
-              .then(data => setGlobalStats(data))
+              .then(data => {
+                if (data && data.tokens) setGlobalStats(data);
+              })
               .catch(() => { });
           } else {
             // Smart Node Discovery
@@ -1074,6 +1160,16 @@ export default function App() {
             if (activeNodeHost && activeNodeHost !== 'localhost' && activeNodeHost !== '127.0.0.1') {
               potentialHosts.push({ host: activeNodeHost, port: 3333, type: 'active-node' });
             }
+
+            // Global Mesh Fallback - try any node with an API port
+            networkStats.peers.forEach(p => {
+              if (p.metrics?.api_port) {
+                const ip = p.addr?.split('://')[1]?.split(':')[0] || p.public_ip;
+                if (ip && !potentialHosts.some(h => h.host === ip)) {
+                  potentialHosts.push({ host: ip, port: p.metrics.api_port, type: 'mesh-discovery' });
+                }
+              }
+            });
 
             let directSuccess = false;
             for (const { host, port, type } of potentialHosts) {
@@ -1107,40 +1203,42 @@ export default function App() {
                     const lines = buffer.split('\n');
                     buffer = lines.pop(); // keep last incomplete line
 
+                    let lastEstimated = 0;
                     for (const line of lines) {
                       if (!line.trim()) continue;
                       try {
                         const data = JSON.parse(line);
                         if (data.status === 'error') throw new Error(data.message);
-                        if (data.done) {
-                          break;
-                        }
-                        accumulatedText += data.text || data.response || "";
+                        if (data.done) break;
+                        
+                        const delta = data.text || data.response || "";
+                        accumulatedText += delta;
                       } catch (e) {
                         if (!line.includes('{"')) accumulatedText += line + "\n";
                       }
                     }
 
+                    const estimatedTokens = Math.max(1, Math.ceil(accumulatedText.length / 4));
+                    const tokenDelta = estimatedTokens - lastEstimated;
+                    if (tokenDelta > 0) {
+                      setTokenConsumption(prev => prev + tokenDelta);
+                      setGlobalStats(prev => ({ ...prev, tokens: prev.tokens + tokenDelta }));
+                      lastEstimated = estimatedTokens;
+                    }
+
                     updateAIMessage(accumulatedText, { mode: 'direct-link', host });
                   }
 
-                  if (buffer.trim()) {
-                    try {
-                      const data = JSON.parse(buffer);
-                      if (!data.done) accumulatedText += data.text || data.response || "";
-                    } catch (e) {
-                      if (!buffer.includes('{"')) accumulatedText += buffer;
-                    }
-                  }
-
-                  setTokenConsumption(prev => prev + Math.max(1, Math.ceil(accumulatedText.length / 4)));
                   updateAIMessage(accumulatedText, { mode: 'direct-link', host });
 
+                  const finalTokens = Math.ceil(accumulatedText.length / 4);
                   fetch('/api/p2p/global_metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chats: 1, tokens: Math.ceil(accumulatedText.length / 4) })
-                  }).then(r => r.json()).then(data => setGlobalStats(data)).catch(() => { });
+                    body: JSON.stringify({ chats: 1, tokens: finalTokens })
+                  }).then(r => r.json()).then(data => {
+                      if (data && data.tokens) setGlobalStats(data);
+                  }).catch(() => { });
                 }
               } catch (err) {
                 console.warn(`[Mesh] Path http://${host}:${port} failed: ${err.message}`);
