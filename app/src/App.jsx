@@ -150,7 +150,7 @@ const AnimatedTerminal = () => {
 };
 
 // --- Landing Page ---
-const Landing = ({ onStart, networkStats, tokenConsumption }) => {
+const Landing = ({ onStart, networkStats, globalStats }) => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
@@ -177,9 +177,15 @@ const Landing = ({ onStart, networkStats, tokenConsumption }) => {
         <p className="sub-title mx-auto">Freemium-First inference routed through a modernized<br />Javascript API bridge. 100% decentralized.</p>
         
         <div className="flex flex-col items-center gap-6 pt-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
-          <button onClick={onStart} className="pill-btn bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10 text-lg py-5 px-12">
-            Enter Global Mesh
-          </button>
+          <div className="flex gap-4">
+             <button onClick={onStart} className="pill-btn bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10 text-lg py-5 px-12">
+                Enter Global Mesh
+             </button>
+             <a href="https://github.com/loayabdelsalam/BEE2BEE" target="_blank" rel="noreferrer" className="pill-btn bg-white text-black border border-gray-200 hover:bg-gray-50 hover:scale-105 active:scale-95 shadow-sm text-lg py-5 px-8 flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+             </a>
+          </div>
           
           <div className="flex flex-col items-center gap-3">
              {subscribed ? (
@@ -200,18 +206,22 @@ const Landing = ({ onStart, networkStats, tokenConsumption }) => {
         </div>
       </div>
       
-      <div className="mt-28 grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-32 px-10">
+      <div className="mt-28 grid grid-cols-2 md:grid-cols-4 gap-8 px-10">
         <div className="text-center group">
-          <p className="text-5xl font-light text-black tracking-tighter">{tokenConsumption.toLocaleString()}</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Your Session Tokens</p>
+          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.tokens.toLocaleString()}</p>
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Global Tokens Streamed</p>
         </div>
         <div className="text-center group">
-          <p className="text-5xl font-light text-black tracking-tighter">{networkStats?.poolSize || 0}</p>
+          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{networkStats?.poolSize || 0}</p>
           <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Active Nodes</p>
         </div>
+        <div className="text-center group">
+          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.visits.toLocaleString()}</p>
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Total Mesh Visits</p>
+        </div>
         <div className="text-center group flex flex-col items-center justify-center">
-          <Shield className="w-12 h-12 text-emerald-500 mx-auto" />
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-emerald-500">No Chat Storage</p>
+          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.chats.toLocaleString()}</p>
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Total Neural Sessions</p>
         </div>
       </div>
 
@@ -277,8 +287,10 @@ const Landing = ({ onStart, networkStats, tokenConsumption }) => {
              </div>
              
              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">pip install bee2bee</span>
-                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-blue-400">Auto-Balancing</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee help</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee create --type p2p</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee join --url</span>
+                <span className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-emerald-400">bee2bee node --sync</span>
              </div>
           </div>
           
@@ -778,6 +790,18 @@ export default function App() {
   const [meshData, setMeshData] = useState({});
   const [selectedModel, setSelectedModel] = useState('llama3');
   const [tokenConsumption, setTokenConsumption] = useState(0);
+  const [globalStats, setGlobalStats] = useState({ visits: 0, chats: 0, tokens: 0 });
+
+  useEffect(() => {
+    fetch('/api/p2p/global_metrics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visits: 1 })
+    })
+    .then(r => r.json())
+    .then(data => setGlobalStats(data))
+    .catch(() => {});
+  }, []);
 
   // 1. Unified Neural Link Parser
   useEffect(() => {
@@ -874,7 +898,7 @@ export default function App() {
     setView('dashboard');
   };
 
-  if (view === 'landing') return <Landing onStart={() => setView('mesh')} networkStats={networkStats} tokenConsumption={tokenConsumption} />;
+  if (view === 'landing') return <Landing onStart={() => setView('mesh')} networkStats={networkStats} globalStats={globalStats} />;
   if (view === 'mesh') return <MeshExplorer meshData={meshData} onBack={() => setView('landing')} onSelectNode={handleSelectNode} />;
   if (view === 'quick-register') return <QuickRegister linkData={linkData} networkStats={networkStats} fetchStats={fetchStats} onComplete={async () => { await fetchStats(); setView('dashboard'); }} />;
   
@@ -940,6 +964,16 @@ export default function App() {
                   
                   updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
                 }
+                
+                // Stream finished, update global stats
+                fetch('/api/p2p/global_metrics', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ chats: 1, tokens: Math.ceil(accumulatedText.length / 4) })
+                })
+                .then(r => r.json())
+                .then(data => setGlobalStats(data))
+                .catch(() => {});
               } else {
                 const errData = response ? await response.json().catch(() => ({})) : {};
                 const errMsg = errData.error || `Status: ${response?.status}`;
@@ -984,6 +1018,15 @@ export default function App() {
                       
                       // Token calculation for direct fallback
                       setTokenConsumption(prev => prev + Math.max(1, Math.ceil(responseText.length / 4)));
+                      
+                      fetch('/api/p2p/global_metrics', {
+                         method: 'POST',
+                         headers: { 'Content-Type': 'application/json' },
+                         body: JSON.stringify({ chats: 1, tokens: Math.ceil(responseText.length / 4) })
+                      })
+                      .then(r => r.json())
+                      .then(data => setGlobalStats(data))
+                      .catch(() => {});
                       
                       directSuccess = true;
                     }

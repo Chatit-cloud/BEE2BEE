@@ -121,6 +121,69 @@ app.post('/api/p2p/status', async (req, res) => {
     return getStatus(req, res);
 });
 
+// 4. GLOBAL METRICS
+app.get('/api/p2p/global_metrics', async (req, res) => {
+    try {
+        const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        if (!sbUrl || !sbKey) return res.json({ visits: 0, chats: 0, tokens: 0 });
+        
+        const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS`, {
+            headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` }
+        });
+        const data = await resp.json();
+        if (data && data.length > 0 && data[0].metrics) {
+            res.json(data[0].metrics);
+        } else {
+            res.json({ visits: 0, chats: 0, tokens: 0 });
+        }
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/p2p/global_metrics', async (req, res) => {
+    try {
+        const { visits = 0, chats = 0, tokens = 0 } = req.body;
+        const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        if (!sbUrl || !sbKey) return res.json({ visits: 0, chats: 0, tokens: 0 });
+        
+        const resp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS`, {
+            headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` }
+        });
+        const data = await resp.json();
+        let current = { visits: 0, chats: 0, tokens: 0 };
+        if (data && data.length > 0 && data[0].metrics) current = data[0].metrics;
+
+        current.visits = (current.visits || 0) + visits;
+        current.chats = (current.chats || 0) + chats;
+        current.tokens = (current.tokens || 0) + tokens;
+
+        await fetch(`${sbUrl}/rest/v1/active_nodes`, {
+            method: 'POST',
+            headers: { 
+                "apikey": sbKey, 
+                "Authorization": `Bearer ${sbKey}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify({
+                peer_id: 'GLOBAL_METRICS',
+                addr: 'global.bee2bee.network',
+                region: 'Global',
+                models: [],
+                last_seen: new Date().toISOString(),
+                metrics: current
+            })
+        });
+
+        res.json(current);
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Fallback
 app.use((req, res) => {
     res.status(404).json({ error: `Route ${req.url} not found in CoitHub Mesh` });
