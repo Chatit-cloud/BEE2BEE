@@ -193,20 +193,15 @@ const Landing = ({ onStart, networkStats, globalStats, meshData }) => {
         <h1 className="google-sans-title">Neural<br />Autonomous Cluster</h1>
         <p className="sub-title mx-auto">Freemium-First inference routed through a modernized<br />Javascript API bridge. 100% decentralized.</p>
 
-          <div className="flex flex-col items-center gap-6 pt-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
-            <div className="flex gap-4">
-              <button onClick={() => { 
-                  if (window.clarity) window.clarity("event", "enter_mesh_clicked");
-                  onStart(); 
-                }} className="pill-btn bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10 text-lg py-5 px-12">
-                Enter Global Mesh
-              </button>
-              <a href="https://github.com/Chatit-cloud/BEE2BEE" target="_blank" rel="noreferrer" className="pill-btn bg-white text-black border border-gray-200 hover:bg-gray-50 hover:scale-105 active:scale-95 shadow-sm text-lg py-5 px-8 flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
-                GitHub
-              </a>
-            </div>
+        <div className="flex flex-col items-center gap-6 pt-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
+          <div className="flex gap-4">
+
+            <a href="https://github.com/Chatit-cloud/BEE2BEE" target="_blank" rel="noreferrer" className="pill-btn bg-white text-black border border-gray-200 hover:bg-gray-50 hover:scale-105 active:scale-95 shadow-sm text-lg py-5 px-8 flex items-center gap-2">
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+              GitHub
+            </a>
           </div>
+        </div>
       </div>
 
       {/* Stealth Mode: Counters suppressed for minimalist aesthetic */}
@@ -611,7 +606,7 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
           </div>
 
           <div className="flex items-center gap-4">
-             {/* Mesh Registry Button Removed */}
+            {/* Mesh Registry Button Removed */}
 
             <div className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50/50 hover:bg-gray-100 transition-all cursor-pointer group">
               <Settings className="w-4 h-4 text-black group-hover:rotate-90 transition-transform" />
@@ -786,9 +781,9 @@ export default function App() {
 
           // Prevent loop if already set
           if (manualNode !== dynamicApiUrl && !manualLink) {
-             setManualNode(dynamicApiUrl);
+            setManualNode(dynamicApiUrl);
           }
-          
+
           setSelectedModel(dynamicModel);
           setLinkData({ link: decodedLink, model: dynamicModel });
 
@@ -798,13 +793,13 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ link: decodedLink })
           })
-          .then(r => r.json())
-          .then(data => {
-            console.log("[Mesh] Global Registration Success:", data);
-            if (window.clarity) window.clarity("event", "node_registered_global", { model: dynamicModel });
-            fetchStats(); // Update UI immediately
-          })
-          .catch(e => console.warn("[Mesh] Registry Sync Pending"));
+            .then(r => r.json())
+            .then(data => {
+              console.log("[Mesh] Global Registration Success:", data);
+              if (window.clarity) window.clarity("event", "node_registered_global", { model: dynamicModel });
+              fetchStats(); // Update UI immediately
+            })
+            .catch(e => console.warn("[Mesh] Registry Sync Pending"));
 
           if (window.clarity) window.clarity("event", "neural_link_discovered", { source: manualLink ? 'manual' : 'url' });
           if (!manualLink) setView('quick-register');
@@ -882,10 +877,10 @@ export default function App() {
       const hash = node.peer_id || node.id || 'anonymous';
       const region = encodeURIComponent(node.region || 'global');
       const apiPort = node.metrics?.api_port || 3333;
-      
+
       const internalLink = `coithub.org://join?network=connectit&model=${model}&hash=${hash}&bootstrap=${bootstrap}`;
       const encodedInternal = encodeURIComponent(internalLink);
-      
+
       return `https://coithub.org/register?link=${encodedInternal}&region=${region}&tag=hf&api_port=${apiPort}`;
     } catch (e) {
       return 'https://coithub.org';
@@ -894,14 +889,14 @@ export default function App() {
 
   const handleSelectNode = (node) => {
     if (!node) return;
-    
+
     const universalLink = generateUniversalLink(node);
-    
+
     // Update URL bar for easy sharing/re-entry
     try {
       const u = new URL(universalLink);
       window.history.pushState({ peer: node.peer_id }, '', u.search);
-    } catch(e) {}
+    } catch (e) { }
 
     // Resolve Host/IP from various metadata fields
     let host = node.addr?.split('://')[1]?.split(':')[0] || node.public_ip || node.addr?.split(':')[0];
@@ -910,7 +905,7 @@ export default function App() {
     const port = node.metrics?.api_port || node.api_port || 3333;
     const apiUrl = `http://${host}:${port}`;
 
-    setManualNode(apiUrl); 
+    setManualNode(apiUrl);
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);
 
     // BACKGROUND SYNC: Ensure the bridge is actually peered with this node for P2P routing
@@ -920,7 +915,7 @@ export default function App() {
       body: JSON.stringify({ link: universalLink })
     }).then(r => r.json()).then(data => {
       console.log("[Mesh] Background Peer Sync Success:", data);
-      fetchStats(); 
+      fetchStats();
     }).catch(e => console.warn("[Mesh] Background Peer Sync Pending..."));
 
     setMessages([{
@@ -956,7 +951,7 @@ Status: *Synchronized*`,
       setGenSettings={setGenSettings}
       onSend={async (content) => {
         if (!content.trim() || isProcessing) return;
-        
+
         // Resolve Target Node from potential long links
         const resolveTarget = (input) => {
           if (!input || !input.includes('link=')) return input;
@@ -973,12 +968,12 @@ Status: *Synchronized*`,
               const host = wsAddr.split('://')[1]?.split(':')[0] || wsAddr.split(':')[0];
               return `${host}:${apiPort}`;
             }
-          } catch(e) { console.error("[Mesh] Link resolve fail:", e); }
+          } catch (e) { console.error("[Mesh] Link resolve fail:", e); }
           return input;
         };
 
         const targetNodeResolved = resolveTarget(manualNode);
-        
+
         setMessages(prev => [...prev, { role: 'user', text: content }]);
         setIsProcessing(true);
         if (window.clarity) window.clarity("event", "message_sent", { target: targetNodeResolved });
@@ -1073,7 +1068,7 @@ Status: *Synchronized*`,
               .then(data => {
                 console.log("[Mesh] Global Sync Success:", data);
                 if (data && data.tokens) {
-                   setGlobalStats(prev => ({ ...prev, ...data }));
+                  setGlobalStats(prev => ({ ...prev, ...data }));
                 }
               })
               .catch(e => console.warn("[Mesh] Global Sync Failed:", e.message));
