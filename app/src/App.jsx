@@ -806,7 +806,7 @@ export default function App() {
   const [view, setView] = useState('landing');
   const [linkData, setLinkData] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [manualNode, setManualNode] = useState('');
+  const [manualNode, setManualNode] = useState(() => localStorage.getItem('bee2bee_last_node') || '');
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
@@ -815,6 +815,10 @@ export default function App() {
   const [tokenConsumption, setTokenConsumption] = useState(0);
   const [globalStats, setGlobalStats] = useState({ visits: 0, chats: 0, tokens: 0 });
   const [genSettings, setGenSettings] = useState({ maxTokens: 2048, temperature: 0.4 });
+
+  useEffect(() => {
+     if (manualNode) localStorage.setItem('bee2bee_last_node', manualNode);
+  }, [manualNode]);
 
   useEffect(() => {
     fetch('/api/p2p/global_metrics', {
