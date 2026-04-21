@@ -135,5 +135,5 @@ python -m bee2bee register --node-url http://104.198.62.116:3333 --network conne
 ## 🤝 Community & Support
 
 Built with ❤️ by **Loay Abdelsalam** and the **ConnectIT Team**.
-- **Developer Support**: Find open-source code on [GitHub](https://github.com/loayabdelsalam/BEE2BEE).
+- **Developer Support**: Find open-source code on [GitHub](https://github.com/Chatit-cloud/BEE2BEE).
 - **Dashboard**: [Bee2Bee ConnectIT Platform](https://coithub.org)
