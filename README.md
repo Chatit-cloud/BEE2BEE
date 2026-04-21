@@ -1,215 +1,77 @@
-# 🐝 Bee2Bee: The Neural Consensus P2P Network
+# 🐝 Bee2Bee: The Global Neural Consensus Mesh
 
 [![PyPI version](https://badge.fury.io/py/bee2bee.svg)](https://badge.fury.io/py/bee2bee)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 
-**Bee2Bee** is a decentralized, peer-to-peer neural consensus engine designed to make AI inference accessible, transparent, and resilient. It allows anyone to contribute compute to a global mesh and anyone to consume it through a unified, high-performance API.
-
----
-
-## 🏗️ Architecture
-
-Bee2Bee operates as a **Decentralized Mesh** where every node is both a consumer and potentially a provider:
-
--   **Neural Nodes**: Host models (Ollama, HF, Transformers) and register via the **Global Registry**.
--   **Consensus Router**: Intelligently routes requests to the lowest-latency, highest-reliability nodes.
--   **API Sidecar**: Every node optionally hosts a **FastAPI** management layer for real-time telemetry.
+**Bee2Bee** is a decentralized, peer-to-peer neural consensus engine and Web SaaS designed to make AI inference accessible, transparent, and resilient. Contribute compute to a global mesh or consume it via our unified Web UI.
 
 ---
 
-## 🚀 Quick Start (Production)
+## 🌐 Connecting to CoitHub.org (The Global Dashboard)
 
-### 1. Installation
+Bee2Bee integrates directly with **[coithub.org](https://coithub.org)**.
+You do not need to build any front-end to join or use the global mesh.
+
+1. **Host a Node**: Run one of the `bee2bee serve-*` commands (see below).
+2. **Access the Mesh**: Open [coithub.org](https://coithub.org) and click **Enter Global Mesh**.
+3. **Dynamic Registration**: You can actively register and expose your API node on CoitHub using the dynamic system registration deep-link format `?link=...` to sync your status with the platform in real-time. Ensure your FastAPI port (default `8000`) is accessible to traffic.
+
+---
+
+## 🛠️ CLI Commands & Examples
+
+Install the package utilizing pip:
 ```bash
 pip install bee2bee
 ```
 
-### 2. Launch a Worker Node (The Consumer/Provider)
-Run a node that automatically joins the network and hosts a model:
+*(Note: You can run commands via `python -m bee2bee` or `bee2bee` if the entrypoint is configured in your OS.)*
+
+### 1. `serve-ollama`
+Serve a fast, local Ollama model directly to the global peer mesh. Includes a built-in FastAPI proxy sidecar for metric telemetry.
+
+**Full Usage:** `python -m bee2bee serve-ollama --model <model> --host <ip> --port <port> --public-host <ip> --region <region> --api-port <port>`
+
+**Example:**
+Launch a `gemma3:270m` node exposing telemetry on port 3333:
 ```bash
-# Deploys a Llama3 provider via Ollama with an API sidecar on port 8000
-python -m bee2bee serve-ollama --model llama3 --api-port 8000
+python -m bee2bee serve-ollama --model gemma3:270m --api-port 3333 --region europe-central
 ```
 
-### 3. Connect to the Mesh
-To join the global discovery map on the [Chatit.cloud Dashboard](https://chatit.cloud):
+### 2. `serve-hf`
+Host open-source weights locally via CPU/GPU directly from the Hugging Face hub.
+
+**Full Usage:** `python -m bee2bee serve-hf --model <model> --port <port> --region <region> --api-port <port>`
+
+**Example:**
 ```bash
-python -m bee2bee config bootstrap_url ws://bootstrap.chatit.cloud:4003
+python -m bee2bee serve-hf --model distilgpt2 --api-port 4000 --region US-East
 ```
 
----
+### 3. `serve-hf-remote`
+Don't have hardware? You can serve a node utilizing Hugging Face's serverless Inference API. Your peer acts as a remote tunneling proxy!
 
-## 🛠️ Developer Guide
+**Full Usage:** `python -m bee2bee serve-hf-remote --model <model> --token <hf_token> --region <region> --api-port <port>`
 
-### Developing Solutions (Python)
-Integrate P2P intelligence directly into your apps using our `rich`-ready SDK:
-
-```python
-import asyncio
-from bee2bee import P2PNode
-
-async def main():
-    # Initialize P2P entrypoint
-    node = P2PNode()
-    await node.start()
-    
-    # Discovery
-    providers = await node.discover_providers(model="llama3")
-    
-    # Intelligent Request
-    response = await node.request_generation(
-        provider_id=providers[0].id,
-        prompt="Synthesize a response for decentralized governance."
-    )
-    print(f"P2P Intelligence: {response['text']}")
-
-asyncio.run(main())
+**Example:**
+```bash
+python -m bee2bee serve-hf-remote --model HuggingFaceH4/zephyr-7b-beta --token hf_YOUR_SECRET --api-port 8080 --region Cloud
 ```
 
-### Interactive Learning
-Check out our [Jupyter Guide](notebook/developing_with_p2p.ipynb) for a step-by-step walkthrough of the p2p architecture.
+### 4. `register`
+Manually prompt the Global Supabase registry to verify and route traffic to your node endpoint directly via a handshake test.
 
----
+**Full Usage:** `python -m bee2bee register --node-url <url> --network <network> --region <region> --test`
 
-## 🌐 FastAPI Integration
-Bee2Bee nodes now support a native **FastAPI** sidecar. This allows you to monitor your node health and peer list via standard HTTP requests:
-
--   **Health Check**: `GET http://localhost:8000/`
--   **Peers List**: `GET http://localhost:8000/peers`
--   **Cloud Inference**: `POST http://localhost:8000/chat`
+**Example:**
+```bash
+python -m bee2bee register --node-url http://104.198.62.116:3333 --network connectit --region europe-central --test
+```
 
 ---
 
 ## 🤝 Community & Support
-- **Developer Support**: [+201211268396]
-- **Dashboard**: [Bee2Bee Live Map](https://chatit.cloud)
 
-Built with ❤️ by the ConnectIT Team for a decentralized future.
-
-## 🚀 Quick Start Guide
-
-### 1. Main End Point (The Supervisor)
-
-This runs the core API server. Every network needs at least one Main Point.
-
-**Run Locally:**
-```bash
-# Starts the API on Port 4002 and P2P Server on Port 4003
-python -m bee2bee api
-```
-*Output:*
--   **API**: `http://127.0.0.1:4002` (Docs: `/docs`)
--   **P2P**: `ws://127.0.0.1:4003`
-
----
-
-### 2. Desktop App (The Dashboard)
-
-A modern UI to visualize the network and chat with models.
-
-**Prerequisites:** Node.js 20+
-
-**Run Locally:**
-```bash
-cd electron-app
-npm install      # First time only
-npm run dev
-```
-*Usage:*
-- Open the App.
-- It connects to `http://localhost:4002` by default.
-- Go to "Chat" to talk to available providers.
-- See [MANUAL_TESTING.md](MANUAL_TESTING.md) for detailed testing steps.
-
----
-
-### 3. Worker Node (The AI Provider)
-
-Run this on any machine (or the same machine) to share an AI model.
-
-**Step A: Configure** (Tell the node where the Main Point is)
-```bash
-# If running on the SAME machine as Main Point:
-python -m bee2bee config bootstrap_url ws://127.0.0.1:4003
-
-# If running on a DIFFERENT machine (LAN/WAN):
-python -m bee2bee config bootstrap_url ws://<MAIN_POINT_IP>:4003
-```
-
-**Step B: Deploy Model**
-
-**Option 1: Hugging Face (Default)**
-Uses `transformers` to run models like GPT-2, Llama, etc. on CPU/GPU.
-```bash
-# Deploys distilgpt2 (CPU friendly)
-python -m bee2bee deploy-hf --model distilgpt2
-```
-
-**Option 2: Ollama (Universal)**
-Uses your local Ollama instance to serve models like Llama3, Mistral, Gemma, etc.
-*Prerequisite: Install and run [Ollama](https://ollama.com)*
-```bash
-# Serve a model (e.g., llama3)
-python -m bee2bee serve-ollama --model llama3
-```
-*Note: This creates a separate peer node on your machine.*
-
-**Option 3: Remote Inference (Cloud)**
-Execute models entirely on Hugging Face's servers via Inference API. **No GPU required** on your local machine!
-```bash
-# Deploys Zephyr 7B (Runs on Hugging Face Cloud)
-python -m bee2bee deploy-hf --model HuggingFaceH4/zephyr-7b-beta --remote --token YOUR_HF_TOKEN
-```
-*Note: The node acts as a proxy/gateway to the remote model.*
-
----
-
-### 4. Bee2Bee Cloud (Google Colab)
-
-Run a powerful node on Google's free GPU infrastructure using our **Hybrid Tunneling** setup.
-
-**Notebook Location**: `notebook/ConnectIT_Cloud_Node.ipynb`
-
-**How it Works (Hybrid Tunneling):**
-To bypass Colab's network restrictions, we use two tunnels:
-1.  **API Tunnel (Cloudflare)**: Provides a stable HTTPS URL (`trycloudflare.com`) for the Desktop App to connect to.
-2.  **P2P Tunnel (Bore)**: Provides a raw WebSocket URL (`bore.pub`) for other Worker Nodes to connect to.
-
-**Instructions:**
-1.  Open the Notebook in Google Colab.
-2.  Run **"Install Dependencies"**.
-3.  Run **"Configure Hybrid Tunnels"** (Installs `cloudflared` & `bore`).
-    - *Wait for it to output the URLs.*
-4.  Run **"Run Bee2Bee Node"**.
-    - *It automatically configures itself to announce the Bore address.*
-
-**Connecting your Desktop App to Colab:**
-1.  Copy the **Cloudflare URL** (e.g., `https://funny-remote-check.trycloudflare.com`).
-2.  Open Desktop App -> Settings.
-3.  Paste into "Main Point URL".
-
----
-
-## 🛠 Advanced Configuration
-
-### Environment Variables
-You can override settings using ENV vars:
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `BEE2BEE_PORT` | Port for P2P Server | `4003` (Worker) / `4003` (API) |
-| `BEE2BEE_HOST` | Bind Interface | `0.0.0.0` |
-| `BEE2BEE_ANNOUNCE_HOST` | Public Hostname (for NAT/Tunnel) | Auto-detected |
-| `BEE2BEE_ANNOUNCE_PORT` | Public Port (for NAT/Tunnel) | Auto-detected |
-| `BEE2BEE_BOOTSTRAP` | URL of Main Point | `None` |
-
-### Troubleshooting
--   **"Connection Refused"**: Ensure the `bootstrap_url` is correct and reachable (try `ping`).
--   **"0 Nodes Connected"**: Check if the Worker Node can reach the Main Point's P2P address (WSS).
--   **Colab Disconnects**: Ensure the Colab tab stays open. Tunnels change if you restart the notebook.
-
----
-
-## 🤝 Contributing
-Contributions are welcome! Please open an issue or PR on [GitHub](https://github.com/Chatit-cloud/BEE2BEE).
+Built with ❤️ by **Loay Abdelsalam** and the **ConnectIT Team**.
+- **Developer Support**: Find open-source code on [GitHub](https://github.com/loayabdelsalam/BEE2BEE).
+- **Dashboard**: [Bee2Bee ConnectIT Platform](https://coithub.org)
