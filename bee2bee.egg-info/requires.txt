@@ -30,6 +30,10 @@ kademlia>=2.2.2
 [hf]
 transformers>=4.40
 datasets>=2.17
+sentencepiece>=0.2.0
+tiktoken>=0.7.0
+protobuf>=3.20.0
+gguf>=0.6.0
 
 [nat]
 miniupnpc>=2.2.5

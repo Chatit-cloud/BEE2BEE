@@ -58,6 +58,26 @@ class HFService(BaseService):
             "max_new_tokens": self.max_new_tokens
         }
 
+    def execute_stream(self, params: Dict[str, Any]):
+        if not self.model:
+            raise ServiceError("Model not loaded")
+        
+        prompt = params.get("prompt")
+        max_new = int(params.get("max_new_tokens", self.max_new_tokens))
+        temperature = float(params.get("temperature", 0.7))
+        
+        if not prompt:
+            raise ServiceError("Missing prompt")
+
+        from .hf import generate_text_stream
+        import json
+        
+        try:
+            for text_chunk in generate_text_stream(self.model, self.tokenizer, self.device, prompt, max_new, temperature=temperature):
+                yield json.dumps({"text": text_chunk}) + "\n"
+        except Exception as e:
+            yield json.dumps({"status": "error", "message": f"Stream error: {e}"}) + "\n"
+
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.model:
             raise ServiceError("Model not loaded")

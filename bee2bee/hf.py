@@ -43,6 +43,29 @@ def generate_text(model, tokenizer, device: str, prompt: str, max_new_tokens: in
         out = model.generate(**inputs, **gen_kwargs)
     return tokenizer.decode(out[0], skip_special_tokens=True)
 
+def generate_text_stream(model, tokenizer, device: str, prompt: str, max_new_tokens: int = 32, temperature: float = 0.7):
+    import torch  # type: ignore
+    from threading import Thread
+    from transformers import TextIteratorStreamer
+    
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+    
+    gen_kwargs = {
+        "max_new_tokens": max_new_tokens,
+        "streamer": streamer,
+        **inputs
+    }
+    if temperature > 0:
+        gen_kwargs["temperature"] = temperature
+        gen_kwargs["do_sample"] = True
+        
+    thread = Thread(target=model.generate, kwargs=gen_kwargs)
+    thread.start()
+    
+    for new_text in streamer:
+        yield new_text
+
 
 def export_torchscript(model, example_inputs) -> Any:
     import torch  # type: ignore

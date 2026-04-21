@@ -184,6 +184,40 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
     }
 });
 
+app.post('/api/subscribe', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email required' });
+        
+        const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        if (!sbUrl || !sbKey) return res.json({ success: true });
+
+        // Using active_nodes as a generic key-value store to avoid schema changes
+        await fetch(`${sbUrl}/rest/v1/active_nodes`, {
+            method: 'POST',
+            headers: { 
+                "apikey": sbKey, 
+                "Authorization": `Bearer ${sbKey}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify({
+                peer_id: `SUB_${email.replace(/[^a-zA-Z0-9@.-]/g, '')}`,
+                addr: email,
+                region: 'Subscriber',
+                models: ['changelog-subscriber'],
+                last_seen: new Date().toISOString(),
+                metrics: { email }
+            })
+        });
+
+        res.json({ success: true });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Fallback
 app.use((req, res) => {
     res.status(404).json({ error: `Route ${req.url} not found in CoitHub Mesh` });
