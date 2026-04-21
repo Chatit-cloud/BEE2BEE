@@ -163,59 +163,61 @@ export class DynamicCoitHubBridge {
     _setupHandlers() {
         if (!this.activeWs) return;
 
-        this.activeWs.on('open', () => {
-            console.log('\x1b[32m%s\x1b[0m', `[Mesh] Swarm Tunnel Established -> ${this.activeUrl}`);
-            this.stats.activeNode = this.activeUrl;
-        });
-
-        this.activeWs.on('message', (data) => {
+        this.activeWs.on('message', (buffer) => {
             try {
-                const msg = JSON.parse(data.toString());
-                
-                if (msg.type === 'peer_discovery' && msg.peers) {
-                    msg.peers.forEach(p => {
-                        this.nodes.add(p.addr);
-                        this._updatePeerMetadata(p.addr, p);
-                        // Register active nodes in Supabase
-                        if (p.status === 'active' || p.is_ingress) {
-                            this.pushNodeToRegistry(p.addr, p);
-                        }
-                    });
-                }
+                const msg = JSON.parse(buffer.toString());
+                const tid = msg.task_id || msg.rid;
+                const req = this.pendingRequests.get(tid);
 
+                // 1. Handshake & Metadata
                 if (msg.type === 'hello' || msg.type === 'handshake') {
-                    console.log(`[Mesh] Identity Handshake: ${this.activeUrl}`);
+                    console.log(`[Mesh] Identity Verified: ${this.activeUrl}`);
                     this._updatePeerMetadata(this.activeUrl, msg);
-                    this.pushNodeToRegistry(this.activeUrl, {
-                        ...msg,
-                        last_seen: new Date().toISOString()
-                    });
+                    this.pushNodeToRegistry(this.activeUrl, { ...msg, last_seen: new Date().toISOString() });
+                    return;
                 }
 
-                if (msg.type === 'gen_response' && this.pendingRequests.has(msg.rid)) {
-                    const pending = this.pendingRequests.get(msg.rid);
-                    this.pendingRequests.delete(msg.rid);
-                    pending.resolve({
-                        text: msg.text,
-                        rid: msg.rid,
-                        metadata: { 
-                            trust_score: msg.trust_score || 0.99,
-                            latency: Date.now() - (pending.ts || Date.now()),
-                            backend: msg.backend
-                        }
-                    });
+                // 2. Real-time Streaming Chunks
+                if (msg.type === 'gen_chunk' || msg.type === 'chunk') {
+                    if (req) {
+                        req.chunks.push(msg.text);
+                        if (req.onChunk) req.onChunk(msg.text);
+                    }
+                    return;
+                }
+
+                // 3. Final Success
+                if (msg.type === 'gen_success' || msg.type === 'gen_response') {
+                    if (req) {
+                        this.pendingRequests.delete(tid);
+                        req.resolve({
+                            text: msg.text || req.chunks.join(''),
+                            rid: tid,
+                            metadata: { backend: msg.backend, latency: Date.now() - req.start }
+                        });
+                    }
+                    return;
+                }
+
+                // 4. Error Handling
+                if (msg.type === 'gen_error') {
+                    if (req) {
+                        this.pendingRequests.delete(tid);
+                        req.reject(new Error(msg.error || 'Neural Node Failure'));
+                    }
+                    return;
                 }
 
                 if (msg.type === 'ping') {
-                    this.activeWs.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+                    this.activeWs.send(JSON.stringify({ type: 'pong' }));
                 }
-            } catch (e) { console.error('[Mesh] Protocol Error:', e); }
+            } catch (e) { console.error('[Mesh] WS Signal Error:', e.message); }
         });
 
         this.activeWs.on('close', () => {
+            console.warn(`[Mesh] Connection Closed: ${this.activeUrl}`);
             this.activeWs = null;
             this.activeUrl = null;
-            this.stats.activeNode = null;
             setTimeout(() => this.connect(), 5000);
         });
     }
@@ -235,9 +237,9 @@ export class DynamicCoitHubBridge {
             api_host: msg.api_host || msg.public_ip || existing.api_host || null,
             public_ip: msg.public_ip || existing.public_ip || null,
             status: 'active',
-            last_seen: Date.now(),
-            location: existing.location || [Math.random() * 120 - 60, Math.random() * 360 - 180]
+            last_seen: Date.now()
         });
+        this.stats.totalPeers = this.peerMetadata.size;
     }
 
     getRegionalMesh() {
@@ -250,87 +252,78 @@ export class DynamicCoitHubBridge {
         return mesh;
     }
 
-    async request(task) {
-        const rid = `req-${crypto.randomBytes(4).toString('hex')}`;
+    async request(payload, onChunk, targetNode = null) {
+        // If a targetNode (IP:Port) is provided, we use it as a direct proxy
+        if (targetNode) {
+            const apiHost = targetNode.startsWith('http') ? targetNode : `http://${targetNode}`;
+            console.log(`[Bridge] Direct Proxying to Neural Node: ${apiHost}`);
+            
+            try {
+                // Direct HTTP Stream Proxy
+                const response = await fetch(`${apiHost}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...payload, stream: true })
+                });
 
-        // 1. Swarm-Backbone Primary (Persistent WebSocket)
-        // If we have any connection, we use it. The Swarm Hub will now auto-forward.
-        if (this.activeWs && this.activeWs.readyState === 1) {
-            console.log(`[Mesh] Dispatching ${rid} to Neural Swarm Hub: ${this.activeUrl}`);
+                if (!response.ok) throw new Error(`Node API error: ${response.status}`);
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    onChunk(decoder.decode(value));
+                }
+                return;
+            } catch (e) {
+                console.error(`[Bridge] Direct Proxy failed, falling back to Swarm:`, e.message);
+            }
+        }
+
+        // Ensure connection is active
+        if (!this.activeWs || this.activeWs.readyState !== WebSocket.OPEN) {
+            await this.connect();
+        }
+
+        const taskId = `task-${crypto.randomBytes(4).toString('hex')}`;
+
+        if (this.activeWs && this.activeWs.readyState === WebSocket.OPEN) {
+            console.log(`[Mesh] Routing ${taskId} to Swarm. Mode: ${onChunk ? 'Stream' : 'Buffered'}`);
+            
             return new Promise((resolve, reject) => {
-                this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
-                
-                this.pendingRequests.set(taskId, { resolve, reject, chunks: [], start: Date.now() });
-                
-                // Increased timeout for Cloud Nodes (60s)
+                this.pendingRequests.set(taskId, {
+                    resolve,
+                    reject,
+                    onChunk,
+                    chunks: [],
+                    start: Date.now()
+                });
+
+                this.activeWs.send(JSON.stringify({
+                    type: 'gen_request',
+                    task_id: taskId,
+                    model: payload.model,
+                    prompt: payload.prompt,
+                    stream: true
+                }));
+
+                // 90s timeout for heavy models
                 setTimeout(() => {
                     if (this.pendingRequests.has(taskId)) {
+                        const req = this.pendingRequests.get(taskId);
                         this.pendingRequests.delete(taskId);
-                        console.error(`[Bridge] Task ${taskId} timed out on node.`);
-                        reject(new Error('Neural Node Timeout - Check GCP Firewall and Model Status'));
+                        if (req.chunks.length > 0) {
+                            resolve({ text: req.chunks.join(''), rid: taskId });
+                        } else {
+                            reject(new Error('Neural Node Timeout - Check GCP Console & Firewall'));
+                        }
                     }
-                }, 60000);
+                }, 90000);
             });
         }
 
-        // 2. Serverless/Direct-HTTP Fallback
-        console.log('[Mesh] Operating in Stateless Mode. Syncing Global Mesh...');
-        await this.syncGlobalMesh();
-        
-        const targetPeer = Array.from(this.peerMetadata.values()).find(p => 
-            p.models && p.models.includes(task.model)
-        );
-
-        if (!targetPeer) {
-            // Even if we don't have metadata, try connecting to seeds if we were empty
-            if (this.nodes.size > 0 && !this.activeWs) {
-                 await this.connect();
-                 if (this.activeWs) return this.request(task);
-            }
-            throw new Error(`Neural Search Failure: No nodes available for model "${task.model}"`);
-        }
-
-        // Use the peer's API port and host from hello message
-        const apiPort = targetPeer.api_port || 8000;
-        const apiHost = targetPeer.api_host || targetPeer.addr?.replace('ws://', '').split(':')[0] || 'localhost';
-        let apiUrl = `http://${apiHost}:${apiPort}`;
-
-        console.log(`[Mesh] Forwarding to Neural Peer: ${apiUrl}`);
-        
-        try {
-            const resp = await fetch(`${apiUrl}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: task.prompt,
-                    model: task.model,
-                    max_new_tokens: task.max_tokens || 2048,
-                    temperature: task.temperature || 0.7,
-                    stream: false
-                })
-            });
-            
-            if (!resp.ok) throw new Error(`Status ${resp.status}`);
-            const data = await resp.json();
-            
-            return {
-                text: data.response || data.text,
-                rid,
-                metadata: {
-                    trust_score: 1.0,
-                    backend: 'fastapi-direct',
-                    node: targetPeer.addr
-                }
-            };
-        } catch (e) {
-            console.error(`[Mesh] Peer routing failed: ${e.message}`);
-            // Final fallback: try to re-establish a hub connection if possible
-            if (!this.activeWs) {
-                await this.connect();
-                if (this.activeWs) return this.request(task);
-            }
-            throw new Error(`Consensus Failed: Node at ${targetPeer.addr} unreachable. Error: ${e.message}`);
-        }
+        throw new Error('Neural Mesh Unreachable. Ensure your local or cloud node is running.');
     }
 
     async generate(prompt, model, options = {}) {
@@ -386,6 +379,13 @@ export class DynamicCoitHubBridge {
                 this.activeWs = null;
             }
             
+            // Global Push: Notify all other users via Supabase
+            await this.pushNodeToRegistry(bootstrapUrl, { 
+                model: url.searchParams.get('model') || 'gemma3:270m',
+                region: url.searchParams.get('region') || 'Global',
+                metrics: { api_port: parseInt(apiPort || '3333'), status: 'active' }
+            });
+
             await this.connect();
             return { success: true, node: bootstrapUrl, connected: !!this.activeWs };
         } catch (e) {

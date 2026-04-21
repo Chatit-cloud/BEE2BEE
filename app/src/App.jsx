@@ -489,8 +489,10 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
          <header className="h-16 border-b border-gray-50 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-50">
             <div className="flex items-center gap-4">
                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Node Active</span>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${networkStats.connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                     {networkStats.connected ? 'Node Active' : 'Neural Path Blocked'}
+                  </span>
                </div>
                <div className="h-4 w-px bg-gray-100 hidden sm:block" />
                <div className="hidden sm:flex items-center gap-2">
@@ -591,57 +593,71 @@ export default function App() {
   const [meshData, setMeshData] = useState({});
   const [selectedModel, setSelectedModel] = useState('llama3');
 
+  // 1. Unified Neural Link Parser
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const link = params.get('link');
-    let modelParam = params.get('model');
+    const apiPort = params.get('api_port') || '3333';
     
     if (link) {
-      // Try to extract model from the nested link if not at top level
-      if (!modelParam) {
-        try {
-          const innerUrlStr = link.includes('://') ? link : `http://${link}`;
-          const innerUrl = new URL(innerUrlStr.replace('coithub.org://', 'http://coithub.org/'));
-          modelParam = innerUrl.searchParams.get('model');
-        } catch (e) {
-          console.warn("[App] Could not parse nested model info:", e);
-        }
-      }
+      try {
+        // Extract IP from bootstrap (d3m://IP:PORT)
+        const bootstrapMatch = link.match(/bootstrap=d3m:\/\/([^&]+)/);
+        const modelMatch = link.match(/model=([^&]+)/);
+        
+        if (bootstrapMatch) {
+          const nodeIp = bootstrapMatch[1].split(':')[0];
+          const dynamicApiUrl = `http://${nodeIp}:${apiPort}`;
+          const dynamicModel = modelMatch ? decodeURIComponent(modelMatch[1]) : 'gemma3:270m';
+          
+          console.log("🌐 Neural Mesh Discovery:", { dynamicApiUrl, dynamicModel });
+          
+          setManualNode(dynamicApiUrl);
+          setSelectedModel(dynamicModel);
+          setLinkData({ link, model: dynamicModel });
+          
+          // Global Registration: Save to Supabase via Bridge
+          fetch('/api/p2p/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ link })
+          }).then(r => r.json()).catch(e => console.warn("Registry Sync Pending:", e));
 
-      setLinkData({ link, model: modelParam || 'Neural Node' });
-      if (modelParam) setSelectedModel(modelParam);
-      setView('quick-register');
+          setView('quick-register');
+        }
+      } catch (e) {
+        console.error("Link parsing failed:", e);
+      }
     }
   }, []);
 
+  // 2. Real Status Tracking (Every 60s)
   const fetchStats = async () => {
+    const target = manualNode ? `${manualNode}/status` : '/api/p2p/status';
     try {
-      const statsRes = await fetch('/api/p2p/status');
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setNetworkStats(data);
-        if (data.mesh) {
-          setMeshData(data.mesh);
-          // Auto-pick first available model if default not found
-          const allModels = Object.values(data.mesh).flat().flatMap(n => n.models);
-          if (allModels.length > 0 && !allModels.includes(selectedModel)) {
-             setSelectedModel(allModels[0]);
-          }
-        }
+      const res = await fetch(target, { mode: 'cors' });
+      if (res.ok) {
+        const data = await res.json();
+        setNetworkStats({
+          connected: true,
+          activeNode: manualNode || data.activeNode,
+          poolSize: data.pool_size || data.poolSize || 1,
+          peers: data.peers || []
+        });
+        if (data.mesh) setMeshData(data.mesh);
+      } else {
+        throw new Error("Node unreachable");
       }
-    } catch { setNetworkStats(prev => ({ ...prev, connected: false })); }
+    } catch (e) { 
+      setNetworkStats(prev => ({ ...prev, connected: false })); 
+    }
   };
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 2000);
+    const interval = setInterval(fetchStats, 60000); // Read every minute as requested
     return () => clearInterval(interval);
-  }, []);
-
-  // Immediate fetch when node is detected
-  useEffect(() => {
-    if (linkData) fetchStats();
-  }, [linkData]);
+  }, [manualNode]);
 
   const handleSelectNode = (node) => {
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);
@@ -684,7 +700,13 @@ export default function App() {
           };
 
           try {
-            const payload = { prompt: content, model: selectedModel, stream: true, max_new_tokens: 2048 };
+            const payload = { 
+              prompt: content, 
+              model: selectedModel, 
+              stream: true, 
+              max_new_tokens: 2048,
+              targetNode: manualNode // Pass the dynamic node to the bridge
+            };
             let response;
             
             try {
@@ -697,85 +719,73 @@ export default function App() {
               console.warn("[Mesh] Cloud bridge network error:", e.message);
             }
 
-            if (!response || !response.ok) {
-              console.warn(`[Mesh] Cloud Bridge unreachable (Status: ${response?.status}). Attempting Neural Direct-Link...`);
-              
-              // Smart Node Discovery: Prioritize current active node and verified peers
-              const potentialHosts = [];
-              const activeNodeIp = networkStats.activeNode?.replace('ws://', '').replace('wss://', '').split(':')[0];
-              
-              // 1. Priority: User's Manual Override
-              if (manualNode) {
-                 const [mHost, mPort] = manualNode.replace('http://', '').replace('https://', '').split(':');
-                 potentialHosts.push({ host: mHost, port: mPort || 3333, type: 'manual-override' });
-              }
-
-              // 2. Priority: The exact IP the Mesh says is active
-              if (activeNodeIp && activeNodeIp !== 'localhost' && activeNodeIp !== '127.0.0.1') {
-                 potentialHosts.push({ host: activeNodeIp, port: 3333, type: 'active-mesh-node' });
-              }
-
-              // 3. Priority: Any other known peers in the pool
-              (networkStats.peers || []).forEach(peer => {
-                const port = peer.api_port || 3333;
-                const host = peer.api_host || peer.public_ip || (peer.addr ? peer.addr.replace('ws://', '').split(':')[0] : null);
-                if (host && host !== 'localhost' && !potentialHosts.find(h => h.host === host)) {
-                   potentialHosts.push({ host, port, type: 'discovered-peer' });
+              if (response && response.ok) {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  const chunk = decoder.decode(value, { stream: true });
+                  accumulatedText += chunk;
+                  updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
                 }
-              });
+              } else {
+                const errData = response ? await response.json().catch(() => ({})) : {};
+                const errMsg = errData.error || `Status: ${response?.status}`;
+                console.warn(`[Mesh] Cloud Bridge Error (${errMsg}). Attempting Neural Direct-Link...`);
+                
+                // Smart Node Discovery
+                const potentialHosts = [];
+                const activeNodeHost = networkStats.activeNode?.replace('ws://', '').replace('wss://', '').split(':')[0];
+                
+                if (manualNode) {
+                   const [mHost, mPort] = manualNode.replace('http://', '').replace('https://', '').split(':');
+                   potentialHosts.push({ host: mHost, port: mPort || 3333, type: 'manual-override' });
+                }
+                if (activeNodeHost && activeNodeHost !== 'localhost' && activeNodeHost !== '127.0.0.1') {
+                   potentialHosts.push({ host: activeNodeHost, port: 3333, type: 'active-mesh-node' });
+                }
 
-              // 4. Fallback: Localhost (only if others fail)
-              potentialHosts.push({ host: 'localhost', port: 3333, type: 'local-fallback' });
+                potentialHosts.push({ host: 'localhost', port: 3333, type: 'local-fallback' });
 
-              let directSuccess = false;
-              for (const { host, port, type } of potentialHosts) {
-                if (directSuccess) break;
-                try {
-                  console.log(`[Mesh] Probing Neural Path (${type}): http://${host}:${port}/generate`);
-                  const url = `http://${host}:${port}/generate`;
-                  const localResp = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                  });
+                let directSuccess = false;
+                for (const { host, port, type } of potentialHosts) {
+                  if (directSuccess) break;
+                  try {
+                    console.log(`[Mesh] Probing Neural Path (${type}): http://${host}:${port}/generate`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    
+                    const localResp = await fetch(`http://${host}:${port}/generate`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload),
+                      signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
 
-                  if (localResp.ok) {
-                    console.log(`[Mesh] Synchronized via Direct-Link to ${host}`);
-                    const reader = localResp.body.getReader();
-                    const decoder = new TextDecoder();
-                    while (true) {
-                      const { done, value } = await reader.read();
-                      if (done) break;
-                      const chunk = decoder.decode(value, { stream: true });
-                      updateAIMessage(accumulatedText + chunk, { mode: 'direct-link', host });
+                    if (localResp.ok) {
+                      const data = await localResp.json();
+                      if (data.status === 'error') throw new Error(data.message);
+                      
+                      updateAIMessage(data.text || data.response, { mode: 'direct-link', host });
+                      directSuccess = true;
                     }
-                    directSuccess = true;
+                  } catch (err) { 
+                    console.warn(`[Mesh] Path http://${host}:${port} failed: ${err.message}`);
                   }
-                } catch (err) { 
-                  console.warn(`[Mesh] Path http://${host}:${port} refused connection.`);
+                }
+
+                if (!directSuccess) {
+                  updateAIMessage("⚠️ Connection Blocked. If using Cloud Node, click the 'Not Secure' icon in browser URL bar -> 'Site Settings' -> Allow 'Insecure Content' to bypass HTTPS blocks.");
                 }
               }
-
-              if (!directSuccess) {
-                updateAIMessage("Mesh link failure. Ensure GCP Port 3333 is open and node is registered.");
-              }
-            } else {
-              // Handle Cloud Stream
-              const reader = response.body.getReader();
-              const decoder = new TextDecoder();
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                updateAIMessage(accumulatedText + chunk, { mode: 'cloud-bridge' });
-              }
+            } catch (err) {
+              console.error("[Mesh] Fatal Error:", err);
+              updateAIMessage(`Neural path disrupted: ${err.message}`);
+            } finally {
+              setIsProcessing(false);
             }
-          } catch (err) {
-            console.error("[Mesh] Fatal Error:", err);
-            updateAIMessage("Neural path disrupted.");
-          } finally {
-            setIsProcessing(false);
-          }
         }}
     />
   );

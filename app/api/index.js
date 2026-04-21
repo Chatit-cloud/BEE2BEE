@@ -31,48 +31,46 @@ app.post('/api/p2p/register', async (req, res) => {
     }
 });
 
-// 2. GENERATE - Unified endpoint used by onSend
+// 2. GENERATE - Unified endpoint with Streaming support
 app.post('/api/p2p/generate', async (req, res) => {
-    const { task, prompt, model } = req.body;
-    
-    // Handle both {task: {prompt}} and {prompt} formats
+    const { task, prompt, model, targetNode } = req.body;
     const finalPrompt = task?.prompt || prompt;
     const finalModel = task?.model || model || 'default';
+    const nodeOverride = task?.targetNode || targetNode;
 
     if (!finalPrompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
-        const result = await bridge.request({
+        console.log(`[Proxy] Streaming request for ${finalModel} (Target: ${nodeOverride || 'Auto'})`);
+        
+        // Setup streaming headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        await bridge.request({
             prompt: finalPrompt,
             model: finalModel,
-            max_tokens: req.body.max_tokens || 2048,
-            temperature: req.body.temperature || 0.7
-        });
+            stream: true
+        }, (chunk) => {
+            res.write(chunk); // Send chunks to client immediately
+        }, nodeOverride);
         
-        res.json({
-            text: result.text,
-            rid: result.rid,
-            metadata: {
-                ...result.metadata,
-                engine: 'coithub-fusion',
-                status: 'verified',
-                mode: 'fusion-serverless'
-            }
-        });
+        res.end();
     } catch (e) {
         console.error('API Error:', e.message);
-        res.status(504).json({ error: `Neural Consensus Timeout: ${e.message}` });
+        // Important: If headers were already sent, we can't send a 504 JSON
+        if (!res.headersSent) {
+            res.status(504).json({ error: `Neural Consensus Timeout: ${e.message}` });
+        } else {
+            res.write(`\n\n[Error]: ${e.message}`);
+            res.end();
+        }
     }
 });
 
-// 3. STATUS - Consolidated telemetry
-app.post('/api/p2p/status', async (req, res) => {
-    const { action, peer } = req.body;
-    if (action === 'discover_peer' && peer && peer.addr) {
-        console.log(`[Bridge] Dynamic Discovery: Connecting to ${peer.addr}`);
-        bridge.connectToPeer(peer.addr); // This tells bridge logic to initiate WS
-        return res.json({ status: 'discovery_initiated' });
-    }
+// 3. STATUS - Consolidated telemetry (Dual GET/POST)
+const getStatus = (req, res) => {
     const stats = bridge.getStats();
     const mesh = bridge.getRegionalMesh();
     res.json({
@@ -81,6 +79,17 @@ app.post('/api/p2p/status', async (req, res) => {
         mode: 'fusion-serverless',
         status: stats.connected ? 'active' : 'idle'
     });
+};
+
+app.get('/api/p2p/status', getStatus);
+app.post('/api/p2p/status', async (req, res) => {
+    const { action, peer } = req.body;
+    if (action === 'discover_peer' && peer && peer.addr) {
+        console.log(`[Bridge] Dynamic Discovery: Connecting to ${peer.addr}`);
+        bridge.connectToPeer(peer.addr);
+        return res.json({ status: 'discovery_initiated' });
+    }
+    return getStatus(req, res);
 });
 
 // Fallback
