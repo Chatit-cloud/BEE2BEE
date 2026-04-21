@@ -572,7 +572,7 @@ class P2PNode:
                     break
 
     async def _handle_gen_request(self, ws, data):
-        rid = data.get("rid")
+        rid = data.get("rid") or data.get("task_id")
         svc_name = data.get("svc", "hf")
         model_name = data.get("model")
         max_tokens = data.get("max_tokens", 2048)
@@ -596,14 +596,40 @@ class P2PNode:
 
         if svc:
             try:
-                logger.debug(f"Executing locally via {svc_name}")
-                result = svc.execute(params)
-                response = {"type": "gen_result", "rid": rid, **result}
-                await self._send(ws, response)
+                logger.info(f"Executing locally via {svc_name} (Stream: {data.get('stream')})")
+                if data.get("stream"):
+                    # WebSocket Streaming support
+                    for chunk_raw in svc.execute_stream(params):
+                        # execute_stream yields JSON-line strings, we need the object or raw string
+                        try:
+                            chunk_data = json.loads(chunk_raw)
+                            chunk_text = chunk_data.get("text", "")
+                            if chunk_text:
+                                await self._send(ws, {
+                                    "type": "gen_chunk",
+                                    "rid": rid,
+                                    "text": chunk_text
+                                })
+                        except:
+                            pass
+                    
+                    # Final closure signal
+                    await self._send(ws, {
+                        "type": "gen_success",
+                        "rid": rid,
+                        "text": "", # chunks already sent
+                        "backend": "hf-transformer"
+                    })
+                else:
+                    # Legacy Buffered support
+                    result = svc.execute(params)
+                    response = {"type": "gen_success", "rid": rid, **result}
+                    await self._send(ws, response)
+                
                 logger.success(f"Local execution target {rid} reached")
             except Exception as e:
                 logger.error(f"Local failure: {e}")
-                await self._send(ws, {"type": "gen_result", "rid": rid, "error": f"local_error: {str(e)}"})
+                await self._send(ws, {"type": "gen_error", "rid": rid, "error": f"local_error: {str(e)}"})
             return
 
         # 2. Swarm Relay / Forwarding Logic

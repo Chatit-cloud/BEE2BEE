@@ -952,18 +952,44 @@ export default function App() {
               if (response && response.ok) {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
+                let buffer = "";
                 while (true) {
                   const { done, value } = await reader.read();
                   if (done) break;
                   
-                  const chunk = decoder.decode(value, { stream: true });
-                  accumulatedText += chunk;
+                  buffer += decoder.decode(value, { stream: true });
+                  const lines = buffer.split('\n');
+                  buffer = lines.pop(); // keep the last incomplete chunk in buffer
                   
-                  // Approximate token calculation
-                  setTokenConsumption(prev => prev + Math.max(1, Math.ceil(chunk.length / 4)));
+                  for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                      const data = JSON.parse(line);
+                      if (data.status === 'error') throw new Error(data.message);
+                      if (data.done) {
+                        break; // End of neural flow
+                      }
+                      accumulatedText += data.text || data.response || "";
+                    } catch (e) {
+                      if (!line.includes('{"')) accumulatedText += line + "\n";
+                    }
+                  }
                   
                   updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
                 }
+                
+                // Final flush and state update
+                if (buffer.trim()) {
+                   try {
+                      const data = JSON.parse(buffer);
+                      if (!data.done) accumulatedText += data.text || data.response || "";
+                   } catch(e) {
+                      if (!buffer.includes('{"')) accumulatedText += buffer;
+                   }
+                }
+                
+                setTokenConsumption(prev => prev + Math.max(1, Math.ceil(accumulatedText.length / 4)));
+                updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
                 
                 // Stream finished, update global stats
                 fetch('/api/p2p/global_metrics', {
@@ -975,10 +1001,6 @@ export default function App() {
                 .then(data => setGlobalStats(data))
                 .catch(() => {});
               } else {
-                const errData = response ? await response.json().catch(() => ({})) : {};
-                const errMsg = errData.error || `Status: ${response?.status}`;
-                console.warn(`[Mesh] Cloud Bridge Error (${errMsg}). Attempting Neural Direct-Link...`);
-                
                 // Smart Node Discovery
                 const potentialHosts = [];
                 const activeNodeHost = networkStats.activeNode?.replace('ws://', '').replace('wss://', '').split(':')[0];
@@ -988,18 +1010,18 @@ export default function App() {
                    potentialHosts.push({ host: mHost, port: mPort || 3333, type: 'manual-override' });
                 }
                 if (activeNodeHost && activeNodeHost !== 'localhost' && activeNodeHost !== '127.0.0.1') {
-                   potentialHosts.push({ host: activeNodeHost, port: 3333, type: 'active-mesh-node' });
+                   potentialHosts.push({ host: activeNodeHost, port: 3333, type: 'active-node' });
                 }
 
-                potentialHosts.push({ host: 'localhost', port: 3333, type: 'local-fallback' });
-
                 let directSuccess = false;
-                for (const { host, port, type } of potentialHosts) {
+                for (const {host, port, type} of potentialHosts) {
                   if (directSuccess) break;
+                  if (!host) continue;
                   try {
                     console.log(`[Mesh] Probing Neural Path (${type}): http://${host}:${port}/generate`);
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    // longer timeout for direct generation streams
+                    const timeoutId = setTimeout(() => controller.abort(), 60000); 
                     
                     const localResp = await fetch(`http://${host}:${port}/generate`, {
                       method: 'POST',
@@ -1010,25 +1032,53 @@ export default function App() {
                     clearTimeout(timeoutId);
 
                     if (localResp.ok) {
-                      const data = await localResp.json();
-                      if (data.status === 'error') throw new Error(data.message);
+                      directSuccess = true;
+                      const reader = localResp.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buffer = "";
                       
-                      const responseText = data.text || data.response || "";
-                      updateAIMessage(responseText, { mode: 'direct-link', host });
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // keep last incomplete line
+                        
+                        for (const line of lines) {
+                          if (!line.trim()) continue;
+                          try {
+                            const data = JSON.parse(line);
+                            if (data.status === 'error') throw new Error(data.message);
+                            if (data.done) {
+                               break;
+                            }
+                            accumulatedText += data.text || data.response || "";
+                          } catch (e) {
+                            if (!line.includes('{"')) accumulatedText += line + "\n";
+                          }
+                        }
+                        
+                        updateAIMessage(accumulatedText, { mode: 'direct-link', host });
+                      }
                       
-                      // Token calculation for direct fallback
-                      setTokenConsumption(prev => prev + Math.max(1, Math.ceil(responseText.length / 4)));
+                      if (buffer.trim()) {
+                         try {
+                            const data = JSON.parse(buffer);
+                            if (!data.done) accumulatedText += data.text || data.response || "";
+                         } catch(e) {
+                            if (!buffer.includes('{"')) accumulatedText += buffer;
+                         }
+                      }
+                      
+                      setTokenConsumption(prev => prev + Math.max(1, Math.ceil(accumulatedText.length / 4)));
+                      updateAIMessage(accumulatedText, { mode: 'direct-link', host });
                       
                       fetch('/api/p2p/global_metrics', {
                          method: 'POST',
                          headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({ chats: 1, tokens: Math.ceil(responseText.length / 4) })
-                      })
-                      .then(r => r.json())
-                      .then(data => setGlobalStats(data))
-                      .catch(() => {});
-                      
-                      directSuccess = true;
+                         body: JSON.stringify({ chats: 1, tokens: Math.ceil(accumulatedText.length / 4) })
+                      }).then(r => r.json()).then(data => setGlobalStats(data)).catch(() => {});
                     }
                   } catch (err) { 
                     console.warn(`[Mesh] Path http://${host}:${port} failed: ${err.message}`);
