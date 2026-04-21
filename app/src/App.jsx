@@ -43,8 +43,114 @@ const NeuralMap = ({ peers }) => {
   );
 };
 
+// --- Animated Terminal Component ---
+const AnimatedTerminal = () => {
+  const [lines, setLines] = useState([]);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const sequence = [
+      { text: "pip install bee2bee", type: "input", delay: 800 },
+      { text: "Collecting bee2bee\n  Downloading bee2bee-2.0.4-py3-none-any.whl (28 kB)\nInstalling collected packages: bee2bee\nSuccessfully installed bee2bee-2.0.4", type: "output", delay: 1000 },
+      { text: "export OLLAMA_HOST=\"0.0.0.0\"\nexport OLLAMA_ORIGINS=\"*\"", type: "input", delay: 1000 },
+      { text: "bee2bee create --type p2p --model gemma3:270m", type: "input", delay: 800 },
+      { text: "⠋ [BEE2BEE] Bootstrapping Neural Core environment...", type: "output", delay: 1200 },
+      { text: "✔ [BEE2BEE] Neural Core initialized.", type: "output", delay: 0 },
+      { text: "⠋ [OLLAMA] Binding daemon to 0.0.0.0:11434 and allocating VRAM...", type: "output", delay: 1500 },
+      { text: "✔ [OLLAMA] Model 'gemma3:270m' successfully allocated to GPU 0.", type: "output", delay: 0 },
+      { text: "⠋ [P2P] Forging cryptographically secure node identity...", type: "output", delay: 800 },
+      { text: "✔ [P2P] Node Identity generated. [Fingerprint: 5c3c1a...9e501]", type: "output", delay: 0 },
+      { text: "⠋ [NETWORK] Registering node with Supabase active nodes registry...", type: "output", delay: 1000 },
+      { text: "✔ [NETWORK] Uplink successful. Region: europe-central.", type: "output", delay: 0 },
+      { text: "\n=======================================================", type: "system", delay: 0 },
+      { text: "🚀 NODE DEPLOYMENT SUCCESSFUL", type: "system", delay: 0 },
+      { text: "=======================================================\n", type: "system", delay: 400 },
+      { text: "🔗 One-Click Onboarding Link:", type: "output", delay: 0 },
+      { text: "https://coithub.org/register?link=coithub.org%3A%2F%2Fjoin%3Fnetwork%3Dconnectit%26model%3Dgemma3%3A270m%26hash%3D5c3c1a...", type: "highlight", delay: 1500 },
+      { text: "\n[INFO] Uvicorn running on http://0.0.0.0:3333 (Press CTRL+C to quit)", type: "output", delay: 500 },
+      { text: "[P2P-EVENT] Swarm node discovering peers: found 3 active channels.", type: "output", delay: 800 },
+      { text: "[P2P-EVENT] Exchanging heartbeat with bootstrap server [104.198.62.116:43661]", type: "output", delay: 1000 },
+      { text: "", type: "input", delay: 9999999 }
+    ];
+
+    const runSequence = async () => {
+      for (let i = 0; i < sequence.length; i++) {
+        if (isCancelled) break;
+        const step = sequence[i];
+
+        if (step.type === "input") {
+          const linesToType = step.text.split('\n');
+          for (let l = 0; l < linesToType.length; l++) {
+            let typed = "";
+            setLines(prev => [...prev, { text: typed, type: "input", active: true }]);
+            const cmd = linesToType[l];
+            for (let c = 0; c < cmd.length; c++) {
+              if (isCancelled) return;
+              typed += cmd[c];
+              setLines(prev => {
+                 const copy = [...prev];
+                 copy[copy.length - 1].text = typed;
+                 return copy;
+              });
+              await new Promise(r => setTimeout(r, 20 + Math.random() * 30)); 
+            }
+            if (isCancelled) return;
+            setLines(prev => {
+                 const copy = [...prev];
+                 copy[copy.length - 1].active = false;
+                 return copy;
+            });
+            await new Promise(r => setTimeout(r, 400));
+          }
+          await new Promise(r => setTimeout(r, step.delay));
+        } else {
+          setLines(prev => [...prev, { text: step.text, type: step.type }]);
+          await new Promise(r => setTimeout(r, step.delay));
+        }
+        
+        if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        }
+      }
+    };
+
+    runSequence();
+    return () => { isCancelled = true; };
+  }, []);
+
+  return (
+    <div 
+      ref={containerRef}
+      className="w-full bg-[#050505] border border-white/5 rounded-[24px] p-6 font-mono text-xs md:text-[13px] text-gray-300 shadow-2xl overflow-hidden h-[420px] overflow-y-auto"
+    >
+       <div className="flex gap-2 mb-6 sticky top-0 left-0 bg-[#050505] pb-2 z-10 w-full">
+          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <span className="ml-4 text-[10px] text-gray-500 uppercase tracking-widest font-bold">Terminal / Neural Node Setup</span>
+       </div>
+       <div className="space-y-2 pb-10 leading-relaxed">
+          {lines.map((line, i) => (
+             <div key={i} className={`
+                ${line.type === 'input' ? 'text-emerald-400 font-semibold' : ''} 
+                ${line.type === 'system' ? 'text-blue-400 font-bold' : ''}
+                ${line.type === 'highlight' ? 'text-amber-300 font-bold bg-amber-500/10 inline-block px-2 py-1 mt-1 rounded break-all' : ''}
+                ${line.text.startsWith('✔') ? 'text-green-400' : ''}
+                ${line.text.startsWith('⠋') ? 'text-gray-400' : ''}
+             `}>
+                {line.type === 'input' && <span className="text-gray-600 mr-2">root@coithub:~$</span>}
+                <span className="whitespace-pre-wrap">{line.text}</span>
+                {line.active && <span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse ml-1 align-middle opacity-80" />}
+             </div>
+          ))}
+       </div>
+    </div>
+  );
+};
+
 // --- Landing Page ---
-const Landing = ({ onStart }) => {
+const Landing = ({ onStart, networkStats, tokenConsumption }) => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
@@ -61,7 +167,7 @@ const Landing = ({ onStart }) => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 relative overflow-hidden">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 relative overflow-x-hidden pt-32 pb-32">
       <div className="mb-12 flex items-center gap-2 py-2 px-4 rounded-full border border-gray-100 bg-white shadow-sm ring-1 ring-black/5 animate-float">
         <Layers className="w-3.5 h-3.5 text-black" />
         <span className="text-[11px] font-bold tracking-tight text-black">CoitHub.org</span>
@@ -94,22 +200,96 @@ const Landing = ({ onStart }) => {
         </div>
       </div>
       
-      <div className="mt-28 grid grid-cols-3 gap-16 md:gap-32 px-10">
+      <div className="mt-28 grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-32 px-10">
         <div className="text-center group">
-          <p className="text-3xl font-light text-black tracking-tighter">1.2M</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Tokens</p>
+          <p className="text-5xl font-light text-black tracking-tighter">{tokenConsumption.toLocaleString()}</p>
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Your Session Tokens</p>
         </div>
         <div className="text-center group">
-          <p className="text-3xl font-light text-black tracking-tighter">48k</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Chats</p>
+          <p className="text-5xl font-light text-black tracking-tighter">{networkStats?.poolSize || 0}</p>
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Active Nodes</p>
         </div>
-        <div className="text-center group">
-          <p className="text-3xl font-light text-black tracking-tighter">8k</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Nodes</p>
+        <div className="text-center group flex flex-col items-center justify-center">
+          <Shield className="w-12 h-12 text-emerald-500 mx-auto" />
+          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-emerald-500">No Chat Storage</p>
         </div>
       </div>
-      <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-50 rounded-full blur-[140px] -z-10" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-gray-50 rounded-full blur-[120px] -z-10" />
+
+      <div className="mt-32 max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 relative z-10 text-left">
+        {/* Team & Built By */}
+        <div className="bg-white rounded-[40px] p-10 border border-gray-100 shadow-2xl shadow-black/[0.02] hover:shadow-black/[0.05] transition-all">
+          <Users className="w-8 h-8 text-black mb-6" />
+          <h3 className="text-2xl font-light mb-4 text-black">The Architects</h3>
+          <p className="text-sm text-gray-600 leading-relaxed mb-8">
+            Bee2Bee Neural Mesh is engineered to democratize access to Large Language Models. Built by an elite task force committed to Open Source and Decentralization, bypassing traditional centralized constraints.
+          </p>
+          <div className="border-t border-gray-100 pt-6">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Lead Architect</p>
+            <p className="text-xl font-semibold text-black tracking-tight">Loay Abdel-Salam</p>
+            <p className="text-xs text-blue-500 font-bold uppercase tracking-widest mt-1">P2P Protocols & Neural Distribution</p>
+          </div>
+        </div>
+
+        {/* Privacy Policy */}
+        <div className="bg-white rounded-[40px] p-10 border border-gray-100 shadow-2xl shadow-black/[0.02] hover:shadow-black/[0.05] transition-all">
+          <Shield className="w-8 h-8 text-black mb-6" />
+          <h3 className="text-2xl font-light mb-4 text-black">Zero-Knowledge Privacy</h3>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Your data is exactly that: yours. CoitHub and the Bee2Bee network operate on a strict <span className="font-bold text-black border-b border-black pb-0.5">No-Chat-Storage Policy</span>.
+            <br/><br/>
+            We do not log, persist, or harvest any conversation data on our servers. Our bridge functions purely as a stateless ephemeral proxy to connect you directly with decentralized nodes. Once your chat session is closed, the tokens vanish into the ether forever.
+          </p>
+        </div>
+
+        {/* Python Package Docs & Tutorial */}
+        <div className="bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 md:col-span-2 shadow-2xl transition-all relative overflow-hidden flex flex-col xl:flex-row gap-12 items-center">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
+          
+          <div className="xl:w-1/3 w-full z-10 flex flex-col space-y-8">
+             <div>
+                <Terminal className="w-8 h-8 text-white mb-6" />
+                <h3 className="text-3xl font-light mb-4 text-white">Zero-Config Node Setup</h3>
+                <p className="text-sm text-gray-400 mb-2 leading-relaxed">Deploying your own neural node is a matter of running two commands. By contributing computation to the mesh, you earn priority routing.</p>
+             </div>
+             
+             <div className="space-y-6">
+                <div className="flex gap-4">
+                   <div className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center font-bold shrink-0">1</div>
+                   <div>
+                      <h4 className="text-white font-semibold mb-1">Install Package</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed">Download the official Bee2Bee python package from PyPI.</p>
+                   </div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold shrink-0">2</div>
+                   <div>
+                      <h4 className="text-white font-semibold mb-1">Make Ollama Public</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed">Allow your local Ollama instance to accept bindings from the P2P mesh by setting environment variables.</p>
+                   </div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold shrink-0">3</div>
+                   <div>
+                      <h4 className="text-white font-semibold mb-1">Join the Mesh</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed">Run the node creation protocol. Your device will automatically establish a cryptographic identity and receive an invite link.</p>
+                   </div>
+                </div>
+             </div>
+             
+             <div className="mt-4 flex flex-wrap gap-2">
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">pip install bee2bee</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-blue-400">Auto-Balancing</span>
+             </div>
+          </div>
+          
+          <div className="xl:w-2/3 w-full z-10">
+             <AnimatedTerminal />
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute top-[0%] right-[0%] w-[800px] h-[800px] bg-blue-50 rounded-full blur-[140px] -z-10" />
+      <div className="absolute bottom-[0%] left-[-10%] w-[600px] h-[600px] bg-gray-50 rounded-full blur-[120px] -z-10" />
     </div>
   );
 };
@@ -285,7 +465,7 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
        <div className="w-full max-w-7xl space-y-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
              <div className="space-y-2">
-                <h2 className="text-4xl font-light tracking-tight">NEURAL <span className="font-semibold">FLEET</span> TERMINAL</h2>
+                <h2 className="text-4xl font-light tracking-tight">ACTIVE <span className="font-semibold">NODES</span> TERMINAL</h2>
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Real-time supervision of decentralized neural nodes.</p>
              </div>
              <div className="flex gap-10">
@@ -375,7 +555,7 @@ const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
 };
 
 // --- Dashboard Component (Redesigned: Gemini B&W Style) ---
-const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNode, setManualNode, onNavigate, onSend }) => {
+const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNode, setManualNode, onNavigate, onSend, tokenConsumption }) => {
   const [input, setInput] = useState('');
   const [showStats, setShowStats] = useState(false);
   const messagesEndRef = useRef(null);
@@ -412,7 +592,11 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Model</span>
                     <p className="text-2xl font-semibold mt-1">{activeModel}</p>
                  </div>
-                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 col-span-2">
+                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Session Tokens</span>
+                    <p className="text-2xl font-semibold mt-1 text-emerald-500">{tokenConsumption.toLocaleString()}</p>
+                 </div>
+                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Primary Ingress</span>
                     <p className="text-sm font-mono mt-1 break-all">{networkStats.activeNode || 'Cloud Bridge Default'}</p>
                  </div>
@@ -593,6 +777,7 @@ export default function App() {
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
   const [meshData, setMeshData] = useState({});
   const [selectedModel, setSelectedModel] = useState('llama3');
+  const [tokenConsumption, setTokenConsumption] = useState(0);
 
   // 1. Unified Neural Link Parser
   useEffect(() => {
@@ -689,7 +874,7 @@ export default function App() {
     setView('dashboard');
   };
 
-  if (view === 'landing') return <Landing onStart={() => setView('mesh')} />;
+  if (view === 'landing') return <Landing onStart={() => setView('mesh')} networkStats={networkStats} tokenConsumption={tokenConsumption} />;
   if (view === 'mesh') return <MeshExplorer meshData={meshData} onBack={() => setView('landing')} onSelectNode={handleSelectNode} />;
   if (view === 'quick-register') return <QuickRegister linkData={linkData} networkStats={networkStats} fetchStats={fetchStats} onComplete={async () => { await fetchStats(); setView('dashboard'); }} />;
   
@@ -699,6 +884,7 @@ export default function App() {
       messages={messages} 
       isProcessing={isProcessing} 
       activeModel={selectedModel}
+      tokenConsumption={tokenConsumption}
       manualNode={manualNode}
       setManualNode={setManualNode}
       onNavigate={(v) => setView(v)}
@@ -745,8 +931,13 @@ export default function App() {
                 while (true) {
                   const { done, value } = await reader.read();
                   if (done) break;
+                  
                   const chunk = decoder.decode(value, { stream: true });
                   accumulatedText += chunk;
+                  
+                  // Approximate token calculation
+                  setTokenConsumption(prev => prev + Math.max(1, Math.ceil(chunk.length / 4)));
+                  
                   updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
                 }
               } else {
@@ -788,7 +979,12 @@ export default function App() {
                       const data = await localResp.json();
                       if (data.status === 'error') throw new Error(data.message);
                       
-                      updateAIMessage(data.text || data.response, { mode: 'direct-link', host });
+                      const responseText = data.text || data.response || "";
+                      updateAIMessage(responseText, { mode: 'direct-link', host });
+                      
+                      // Token calculation for direct fallback
+                      setTokenConsumption(prev => prev + Math.max(1, Math.ceil(responseText.length / 4)));
+                      
                       directSuccess = true;
                     }
                   } catch (err) { 

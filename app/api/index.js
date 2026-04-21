@@ -97,6 +97,9 @@ const getStatus = async (req, res) => {
         }
     }
 
+    // Ensure we have the latest mesh nodes from Supabase before responding
+    await bridge.syncGlobalMesh();
+    
     const stats = bridge.getStats();
     const mesh = bridge.getRegionalMesh();
     res.json({

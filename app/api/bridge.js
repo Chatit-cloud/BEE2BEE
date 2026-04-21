@@ -345,7 +345,8 @@ export class DynamicCoitHubBridge {
             ...this.stats,
             poolSize: this.peerMetadata.size,
             connected: !!this.activeWs,
-            peers: Array.from(this.peerMetadata.values())
+            peers: Array.from(this.peerMetadata.values()),
+            mesh: this.getRegionalMesh()
         };
     }
 
