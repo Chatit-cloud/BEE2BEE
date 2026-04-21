@@ -268,14 +268,17 @@ export class DynamicCoitHubBridge {
 
                 if (!response.ok) throw new Error(`Node API error: ${response.status}`);
                 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    onChunk(decoder.decode(value));
-                }
-                return;
+                return new Promise((resolve, reject) => {
+                    response.body.on('data', (chunk) => {
+                        if (onChunk) onChunk(chunk.toString('utf-8'));
+                    });
+                    response.body.on('end', () => {
+                        resolve();
+                    });
+                    response.body.on('error', (err) => {
+                        reject(err);
+                    });
+                });
             } catch (e) {
                 console.error(`[Bridge] Direct Proxy failed, falling back to Swarm:`, e.message);
             }

@@ -43,10 +43,14 @@ app.post('/api/p2p/generate', async (req, res) => {
     try {
         console.log(`[Proxy] Streaming request for ${finalModel} (Target: ${nodeOverride || 'Auto'})`);
         
-        // Setup streaming headers
+        // Setup streaming headers and flush to bypass Vercel 10s TTFB timeout
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders(); // Tell Vercel the connection is established and streaming has started
+
+        // Send a ping chunk so connection doesn't drop while Ollama loads
+        res.write(' ');
 
         await bridge.request({
             prompt: finalPrompt,
@@ -80,7 +84,8 @@ const getStatus = async (req, res) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s quick probe
             
-            const statusResp = await fetch(`${apiHost}/status`, { signal: controller.signal });
+            // The Python node health check is at the root ("/") not "/status"
+            const statusResp = await fetch(`${apiHost}/`, { signal: controller.signal });
             clearTimeout(timeoutId);
             
             if (statusResp.ok) {
