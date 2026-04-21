@@ -588,6 +588,7 @@ export default function App() {
   const [linkData, setLinkData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [manualNode, setManualNode] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
   const [meshData, setMeshData] = useState({});
@@ -599,57 +600,76 @@ export default function App() {
     const link = params.get('link');
     const apiPort = params.get('api_port') || '3333';
     
-    if (link) {
+    // Deep Link & Path Router
+    if (window.location.pathname.includes('/register') || link) {
       try {
-        // Extract IP from bootstrap (d3m://IP:PORT)
-        const bootstrapMatch = link.match(/bootstrap=d3m:\/\/([^&]+)/);
-        const modelMatch = link.match(/model=([^&]+)/);
+        const decodedLink = decodeURIComponent(link || '');
+        const bootstrapMatch = decodedLink.match(/bootstrap=([^&]+)/) || decodedLink.match(/peer=([^&]+)/);
+        const modelMatch = decodedLink.match(/model=([^&]+)/);
         
         if (bootstrapMatch) {
-          const nodeIp = bootstrapMatch[1].split(':')[0];
+          const bootstrapEnc = bootstrapMatch[1];
+          // Robust base64 decoding
+          let padded = bootstrapEnc;
+          const missing = 4 - (bootstrapEnc.length % 4);
+          if (missing !== 4) padded = bootstrapEnc + '='.repeat(missing);
+          const bootstrapUrl = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+          
+          const nodeIp = bootstrapUrl.includes('://') ? bootstrapUrl.split('://')[1].split(':')[0] : bootstrapUrl.split(':')[0];
           const dynamicApiUrl = `http://${nodeIp}:${apiPort}`;
           const dynamicModel = modelMatch ? decodeURIComponent(modelMatch[1]) : 'gemma3:270m';
           
-          console.log("🌐 Neural Mesh Discovery:", { dynamicApiUrl, dynamicModel });
+          console.log("🚀 Route Target Detected:", { dynamicApiUrl, dynamicModel });
           
           setManualNode(dynamicApiUrl);
           setSelectedModel(dynamicModel);
-          setLinkData({ link, model: dynamicModel });
+          setLinkData({ link: decodedLink, model: dynamicModel });
           
-          // Global Registration: Save to Supabase via Bridge
           fetch('/api/p2p/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ link })
-          }).then(r => r.json()).catch(e => console.warn("Registry Sync Pending:", e));
+            body: JSON.stringify({ link: decodedLink })
+          }).catch(e => console.warn("Registry Sync Pending"));
 
           setView('quick-register');
+        } else if (link) {
+           // Fallback for non-bootstrap links
+           setView('quick-register');
         }
       } catch (e) {
-        console.error("Link parsing failed:", e);
+        console.error("Routing Error:", e);
       }
     }
   }, []);
 
-  // 2. Real Status Tracking (Every 60s)
+  // 2. Real Status Tracking (Every 60s via Secure Proxy)
   const fetchStats = async () => {
-    const target = manualNode ? `${manualNode}/status` : '/api/p2p/status';
+    // Always use our backend as a proxy to avoid Mixed Content blocks on HTTPS
+    const base = '/api/p2p/status';
+    const target = manualNode ? `${base}?target=${encodeURIComponent(manualNode)}` : base;
+    
     try {
-      const res = await fetch(target, { mode: 'cors' });
+      const res = await fetch(target);
       if (res.ok) {
         const data = await res.json();
+        const connected = data.status === 'ok' || data.status === 'active' || !!data.peer_id || !!data.connected;
+        
         setNetworkStats({
-          connected: true,
+          connected: connected,
           activeNode: manualNode || data.activeNode,
-          poolSize: data.pool_size || data.poolSize || 1,
-          peers: data.peers || []
+          poolSize: data.pool_size || data.poolSize || (data.mesh ? Object.keys(data.mesh).length : 1),
+          peers: data.peers || (data.mesh ? Object.values(data.mesh).flat() : [])
         });
+        
+        setIsConnected(connected); // Sync global connection state
         if (data.mesh) setMeshData(data.mesh);
       } else {
-        throw new Error("Node unreachable");
+        throw new Error("Node unreachable via Proxy");
       }
     } catch (e) { 
+      console.warn("[Mesh] Proxy Pulse Error:", e.message);
       setNetworkStats(prev => ({ ...prev, connected: false })); 
+      setIsConnected(false);
     }
   };
 

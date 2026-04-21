@@ -70,14 +70,35 @@ app.post('/api/p2p/generate', async (req, res) => {
 });
 
 // 3. STATUS - Consolidated telemetry (Dual GET/POST)
-const getStatus = (req, res) => {
+const getStatus = async (req, res) => {
+    const target = req.query.target;
+    
+    // If a specific node target is provided, proxy the health check to avoid Mixed Content blocks
+    if (target) {
+        try {
+            const apiHost = target.startsWith('http') ? target : `http://${target}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s quick probe
+            
+            const statusResp = await fetch(`${apiHost}/status`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            
+            if (statusResp.ok) {
+                const data = await statusResp.json();
+                return res.json(data);
+            }
+        } catch (e) {
+            return res.json({ status: 'unreachable', error: e.message });
+        }
+    }
+
     const stats = bridge.getStats();
     const mesh = bridge.getRegionalMesh();
     res.json({
         ...stats,
         mesh,
         mode: 'fusion-serverless',
-        status: stats.connected ? 'active' : 'idle'
+        status: (stats.connected || stats.poolSize > 0) ? 'active' : 'idle'
     });
 };
 
