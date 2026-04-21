@@ -895,7 +895,11 @@ export default function App() {
         });
         
         setIsConnected(connected); // Sync global connection state
-        if (data.mesh) setMeshData(data.mesh);
+        if (data.mesh) setMeshData(data.mesh || {});
+        else if (data.peers) {
+           // Fallback if backend uses flat peers list
+           setMeshData({ 'Swarm': data.peers });
+        }
       } else {
         throw new Error("Node unreachable via Proxy");
       }
@@ -908,7 +912,7 @@ export default function App() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 60000); // Read every minute as requested
+    const interval = setInterval(fetchStats, 12000); // UI Refresh every 12s
     return () => clearInterval(interval);
   }, [manualNode]);
 

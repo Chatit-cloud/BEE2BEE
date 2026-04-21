@@ -76,37 +76,52 @@ app.post('/api/p2p/generate', async (req, res) => {
 // 3. STATUS - Consolidated telemetry (Dual GET/POST)
 const getStatus = async (req, res) => {
     const target = req.query.target;
+    let targetStatus = null;
     
-    // If a specific node target is provided, proxy the health check to avoid Mixed Content blocks
+    // 1. Optional target probe (Proxy)
     if (target) {
         try {
             const apiHost = target.startsWith('http') ? target : `http://${target}`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s quick probe
-            
-            // The Python node health check is at the root ("/") not "/status"
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             const statusResp = await fetch(`${apiHost}/`, { signal: controller.signal });
             clearTimeout(timeoutId);
-            
             if (statusResp.ok) {
-                const data = await statusResp.json();
-                return res.json(data);
+                targetStatus = await statusResp.json();
             }
         } catch (e) {
-            return res.json({ status: 'unreachable', error: e.message });
+            console.warn(`[Proxy] Target ${target} unreachable: ${e.message}`);
         }
     }
 
-    // Ensure we have the latest mesh nodes from Supabase before responding
+    // 2. Global Mesh Sync
     await bridge.syncGlobalMesh();
     
     const stats = bridge.getStats();
-    const mesh = bridge.getRegionalMesh();
+    let mesh = bridge.getRegionalMesh();
+
+    // 3. Merge target status into mesh if not already there
+    if (targetStatus && target) {
+        const region = targetStatus.region || 'Local-Probe';
+        if (!mesh[region]) mesh[region] = [];
+        // Prevent duplicates
+        const exists = mesh[region].some(n => n.addr === target || n.peer_id === targetStatus.peer_id);
+        if (!exists) {
+            mesh[region].push({
+                ...targetStatus,
+                addr: target,
+                status: 'active',
+                latency: 5,
+                tag: 'direct-ingress'
+            });
+        }
+    }
+
     res.json({
         ...stats,
         mesh,
         mode: 'fusion-serverless',
-        status: (stats.connected || stats.poolSize > 0) ? 'active' : 'idle'
+        status: (stats.connected || stats.poolSize > 0 || !!targetStatus) ? 'active' : 'idle'
     });
 };
 

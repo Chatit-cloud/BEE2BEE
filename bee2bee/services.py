@@ -76,9 +76,10 @@ class HFService(BaseService):
             for text_chunk in generate_text_stream(self.model, self.tokenizer, self.device, prompt, max_new, temperature=temperature):
                 yield json.dumps({"text": text_chunk}) + "\n"
             
-            # Explicit End of Stream Signal
-            yield json.dumps({"done": true}) + "\n"
+            # Explicit End of Stream Signal - uses Python True for JSON true
+            yield json.dumps({"done": True}) + "\n"
         except Exception as e:
+            logger.error(f"Stream generation failed: {e}")
             yield json.dumps({"status": "error", "message": f"Stream error: {e}"}) + "\n"
 
     def execute(self, params: Dict[str, Any]) -> Dict[str, Any]:

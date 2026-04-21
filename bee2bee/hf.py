@@ -50,25 +50,38 @@ def generate_text_stream(model, tokenizer, device: str, prompt: str, max_new_tok
     from transformers import TextIteratorStreamer
 
     # 1. Prepare chat template if possible
-    # We expect prompt to be a string or we can try to parse it if it looks like a conversation
+    # Robust multi-line parsing
     messages = []
-    if "\nuser: " in prompt or prompt.startswith("user: "):
-        parts = prompt.split("\n")
-        for p in parts:
-            if p.startswith("user: "): messages.append({"role": "user", "content": p[6:]})
-            elif p.startswith("assistant: "): messages.append({"role": "assistant", "content": p[11:]})
+    current_role = None
+    current_content = []
+    
+    for line in prompt.split("\n"):
+        if line.startswith("user: "):
+            if current_role: messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+            current_role = "user"
+            current_content = [line[6:]]
+        elif line.startswith("assistant: "):
+            if current_role: messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+            current_role = "assistant"
+            current_content = [line[11:]]
+        elif current_role:
+            current_content.append(line)
+            
+    if current_role:
+        messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
     
     if messages and hasattr(tokenizer, 'apply_chat_template'):
         try:
             formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             inputs = tokenizer(formatted_prompt, return_tensors="pt").to(device)
-        except:
+        except Exception as e:
+            logger.warning(f"Chat template failed: {e}")
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
     else:
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
     # 2. Use TextIteratorStreamer with specific delta-focused settings
-    # skip_prompt=True is essential to avoid "re-writing from start"
+    # Ensure we use skip_prompt=True to only get the AI response
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     
     gen_kwargs = {

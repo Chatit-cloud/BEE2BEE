@@ -112,7 +112,31 @@ class ProviderInfo(BaseModel):
 
 @app.get("/")
 def home():
-    return {"status": "ok", "node_id": node.peer_id if node else "not_started"}
+    if not node:
+        return {"status": "starting", "node_id": "not_started"}
+        
+    # Gather services and models
+    services_meta = {}
+    all_models = []
+    for name, svc in node.local_services.items():
+        meta = svc.get_metadata()
+        services_meta[name] = meta
+        if "models" in meta:
+            all_models.extend(meta["models"])
+
+    return {
+        "status": "ok",
+        "node_id": node.peer_id,
+        "peer_id": node.peer_id,
+        "region": node.region or "Global",
+        "models": list(set(all_models)),
+        "services": services_meta,
+        "metrics": {
+            "uptime": int(time.time() - node.start_time) if hasattr(node, 'start_time') else 0,
+            "pool_size": len(node.peers),
+            "status": "active"
+        }
+    }
 
 @app.get("/peers", dependencies=[Depends(get_api_key)])
 def get_peers():
