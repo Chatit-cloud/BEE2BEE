@@ -239,6 +239,10 @@ export class DynamicCoitHubBridge {
             status: 'active',
             last_seen: Date.now()
         });
+        
+        // Push newly seen/updated node to the global registry
+        this.pushNodeToRegistry(addr, this.peerMetadata.get(addr));
+        
         this.stats.totalPeers = this.peerMetadata.size;
     }
 
