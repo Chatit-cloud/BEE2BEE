@@ -55,7 +55,9 @@ app.post('/api/p2p/generate', async (req, res) => {
         await bridge.request({
             prompt: finalPrompt,
             model: finalModel,
-            stream: true
+            stream: true,
+            max_tokens: req.body.max_tokens,
+            temperature: req.body.temperature
         }, (chunk) => {
             res.write(chunk); // Send chunks to client immediately
         }, nodeOverride);
@@ -165,7 +167,10 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
         const { visits = 0, chats = 0, tokens = 0 } = req.body;
         const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
         const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-        if (!sbUrl || !sbKey) return res.json({ visits: 0, chats: 0, tokens: 0 });
+        if (!sbUrl || !sbKey) {
+            if (chats > 0 || tokens > 0) console.warn("[Metrics] Persistence disabled: Missing Supabase credentials in .env");
+            return res.json({ visits: 0, chats: 0, tokens: 0 });
+        }
         
         // 1. Fetch current
         const fetchResp = await fetch(`${sbUrl}/rest/v1/active_nodes?peer_id=eq.GLOBAL_METRICS&select=metrics`, {
@@ -207,6 +212,7 @@ app.post('/api/p2p/global_metrics', async (req, res) => {
         }
 
         res.json(current);
+        console.log(`[Metrics] Synchronized: ${current.tokens} tokens, ${current.chats} chats.`);
     } catch(e) {
         console.error('[Metrics] POST Error:', e.message);
         res.status(500).json({ error: e.message });

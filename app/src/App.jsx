@@ -175,7 +175,7 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
       } else {
         setSubError(true);
       }
-    } catch { 
+    } catch {
       setSubError(true);
     } finally {
       setLoading(false);
@@ -215,8 +215,8 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
                     disabled={loading}
                     className="bg-transparent border-none outline-none text-xs w-48 font-medium"
                   />
-                  <button 
-                    onClick={handleSubscribe} 
+                  <button
+                    onClick={handleSubscribe}
                     disabled={loading}
                     className={`${loading ? 'animate-pulse cursor-not-allowed' : 'hover:text-black'} bg-gray-50 text-gray-400 p-2 rounded-full transition-colors`}
                   >
@@ -238,10 +238,6 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
         <div className="text-center group">
           <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{networkStats?.poolSize || 0}</p>
           <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Active Nodes</p>
-        </div>
-        <div className="text-center group">
-          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.visits.toLocaleString()}</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Total Mesh Visits</p>
         </div>
         <div className="text-center group flex flex-col items-center justify-center">
           <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.chats.toLocaleString()}</p>
@@ -947,10 +943,9 @@ export default function App() {
 
           setView('quick-register');
         } else if (link) {
-          // Fallback for non-bootstrap links
           setView('quick-register');
         }
-      } catch (e) {
+      } catch (e) { }
     }
   }, []);
 
@@ -958,11 +953,11 @@ export default function App() {
   useEffect(() => {
     if (view === 'dashboard' && !manualNode && networkStats.peers.length > 0) {
       // Find nodes that have an API port and are marked as active
-      const available = networkStats.peers.filter(p => 
-        (p.metrics?.api_port || p.api_port) && 
+      const available = networkStats.peers.filter(p =>
+        (p.metrics?.api_port || p.api_port) &&
         (p.status === 'active' || p.metrics?.status === 'active')
       );
-      
+
       if (available.length > 0) {
         console.log("[Mesh] Auto-selecting target node from swarm list...");
         handleSelectNode(available[0]);
@@ -972,54 +967,86 @@ export default function App() {
 
   // 2. Real Status Tracking (Every 60s via Secure Proxy)
   const fetchStats = async () => {
-    // Always use our backend as a proxy to avoid Mixed Content blocks on HTTPS
     const base = '/api/p2p/status';
     const target = manualNode ? `${base}?target=${encodeURIComponent(manualNode)}` : base;
 
     try {
+      // 1. Fetch Node Status
       const res = await fetch(target);
       if (res.ok) {
         const data = await res.json();
         const connected = data.status === 'ok' || data.status === 'active' || !!data.peer_id || !!data.connected;
 
-        setNetworkStats({
+        setNetworkStats(prev => ({
+          ...prev,
           connected: connected,
           activeNode: manualNode || data.activeNode,
-          poolSize: data.pool_size || data.poolSize || (data.mesh ? Object.keys(data.mesh).length : 1),
-          peers: data.peers || (data.mesh ? Object.values(data.mesh).flat() : [])
-        });
+          poolSize: data.pool_size || data.poolSize || (data.mesh ? Object.keys(data.mesh).length : prev.poolSize),
+          peers: data.peers || (data.mesh ? Object.values(data.mesh).flat() : prev.peers)
+        }));
 
-        setIsConnected(connected); // Sync global connection state
+        setIsConnected(connected);
         if (data.mesh) setMeshData(data.mesh || {});
-        else if (data.peers) {
-          // Fallback if backend uses flat peers list
-          setMeshData({ 'Swarm': data.peers });
-        }
-      } else {
-        throw new Error("Node unreachable via Proxy");
+      }
+
+      // 2. Sync Global Metrics
+      const mRes = await fetch('/api/p2p/global_metrics');
+      if (mRes.ok) {
+        const mData = await mRes.json();
+        setGlobalStats(prev => ({
+          ...prev,
+          ...mData,
+          tokens: Math.max(prev.tokens, mData.tokens || 0) // Avoid flickering during chat
+        }));
       }
     } catch (e) {
-      console.warn("[Mesh] Proxy Pulse Error:", e.message);
-      setNetworkStats(prev => ({ ...prev, connected: false }));
-      setIsConnected(false);
+      console.warn("[Mesh] Telemetry failure:", e.message);
     }
   };
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 12000); // UI Refresh every 12s
+    const interval = setInterval(fetchStats, 15000); // UI Refresh every 15s
     return () => clearInterval(interval);
   }, [manualNode]);
 
+  const generateUniversalLink = (node) => {
+    try {
+      const wsAddr = node.addr || '';
+      const bootstrap = btoa(wsAddr).replace(/=/g, '');
+      const model = encodeURIComponent((node.models && node.models[0]) || 'llama3');
+      const hash = node.peer_id || node.id || 'anonymous';
+      const region = encodeURIComponent(node.region || 'global');
+      const apiPort = node.metrics?.api_port || 3333;
+      
+      const internalLink = `coithub.org://join?network=connectit&model=${model}&hash=${hash}&bootstrap=${bootstrap}`;
+      const encodedInternal = encodeURIComponent(internalLink);
+      
+      return `https://coithub.org/register?link=${encodedInternal}&region=${region}&tag=hf&api_port=${apiPort}`;
+    } catch (e) {
+      return 'https://coithub.org';
+    }
+  };
+
   const handleSelectNode = (node) => {
+    if (!node) return;
+    
+    const universalLink = generateUniversalLink(node);
+    
+    // Update URL bar for easy sharing/re-entry
+    try {
+      const u = new URL(universalLink);
+      window.history.pushState({ peer: node.peer_id }, '', u.search);
+    } catch(e) {}
+
     // Resolve Host/IP from various metadata fields
     let host = node.addr?.split('://')[1]?.split(':')[0] || node.public_ip || node.addr?.split(':')[0];
-    if (host === 'localhost' || host === '127.0.0.1') host = window.location.hostname; // Smart fallback
-    
+    if (host === 'localhost' || host === '127.0.0.1') host = window.location.hostname;
+
     const port = node.metrics?.api_port || 3333;
     const apiUrl = `http://${host}:${port}`;
 
-    setManualNode(apiUrl); 
+    setManualNode(universalLink); 
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);
 
     setMessages([{
@@ -1027,12 +1054,12 @@ export default function App() {
       text: `### 🔗 Neural Link Established
 The decentralized path to the **${node.region}** cluster is now active.
       
+- **Neural Identity**: \`${node.peer_id || 'anonymous'}\`
 - **Neural Path**: \`${apiUrl}\`
-- **Identity**: \`${node.peer_id || 'anonymous'}\`
-- **Target**: \`${node.models?.[0] || 'inference'}\`
+- **Shareable Link**: [Copy Registration](${universalLink})
 
 Status: *Synchronized*`,
-      metadata: { neural_path: apiUrl, mode: 'mesh-ingress', latency: node.latency }
+      metadata: { neural_path: apiUrl, mode: 'mesh-ingress', latency: node.latency || 45 }
     }]);
     setView('dashboard');
   };
@@ -1053,10 +1080,32 @@ Status: *Synchronized*`,
       onNavigate={(v) => setView(v)}
       onSend={async (content) => {
         if (!content.trim() || isProcessing) return;
+        
+        // Resolve Target Node from potential long links
+        const resolveTarget = (input) => {
+          if (!input || !input.includes('link=')) return input;
+          try {
+            const url = new URL(input);
+            const apiPort = url.searchParams.get('api_port') || 3333;
+            const linkParam = url.searchParams.get('link');
+            const innerParams = new URLSearchParams(linkParam.split('?')[1] || linkParam);
+            const bootstrap = innerParams.get('bootstrap');
+            if (bootstrap) {
+              let b = bootstrap;
+              while (b.length % 4 !== 0) b += '=';
+              const wsAddr = atob(b);
+              const host = wsAddr.split('://')[1]?.split(':')[0] || wsAddr.split(':')[0];
+              return `${host}:${apiPort}`;
+            }
+          } catch(e) { console.error("[Mesh] Link resolve fail:", e); }
+          return input;
+        };
+
+        const targetNodeResolved = resolveTarget(manualNode);
+        
         setMessages(prev => [...prev, { role: 'user', text: content }]);
         setIsProcessing(true);
 
-        // Initial empty AI message for streaming
         const messageId = Date.now();
         setMessages(prev => [...prev, { role: 'ai', text: '', id: messageId, metadata: { streaming: true } }]);
 
@@ -1082,7 +1131,7 @@ Status: *Synchronized*`,
             stream: true,
             max_tokens: genSettings.maxTokens,
             temperature: genSettings.temperature,
-            targetNode: manualNode
+            targetNode: targetNodeResolved
           };
           let response;
 
@@ -1114,7 +1163,7 @@ Status: *Synchronized*`,
                   const data = JSON.parse(line);
                   if (data.status === 'error') throw new Error(data.message);
                   if (data.done) break;
-                  
+
                   const delta = data.text || data.response || "";
                   accumulatedText += delta;
                 } catch (e) {
@@ -1129,7 +1178,7 @@ Status: *Synchronized*`,
                 setGlobalStats(prev => ({ ...prev, tokens: prev.tokens + tokenDelta }));
                 lastEstimated = estimatedTokens;
               }
-              
+
               updateAIMessage(accumulatedText, { mode: 'cloud-bridge', path: 'swarm-backbone' });
             }
 
@@ -1137,7 +1186,7 @@ Status: *Synchronized*`,
 
             // Stream finished, finalize local consumption and update global stats
             const finalTokens = Math.ceil(accumulatedText.length / 4);
-            
+
             fetch('/api/p2p/global_metrics', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1145,9 +1194,10 @@ Status: *Synchronized*`,
             })
               .then(r => r.json())
               .then(data => {
+                console.log("[Mesh] Global Sync Success:", data);
                 if (data && data.tokens) setGlobalStats(data);
               })
-              .catch(() => { });
+              .catch(e => console.warn("[Mesh] Global Sync Failed:", e.message));
           } else {
             // Smart Node Discovery
             const potentialHosts = [];
@@ -1210,7 +1260,7 @@ Status: *Synchronized*`,
                         const data = JSON.parse(line);
                         if (data.status === 'error') throw new Error(data.message);
                         if (data.done) break;
-                        
+
                         const delta = data.text || data.response || "";
                         accumulatedText += delta;
                       } catch (e) {
@@ -1237,8 +1287,9 @@ Status: *Synchronized*`,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chats: 1, tokens: finalTokens })
                   }).then(r => r.json()).then(data => {
-                      if (data && data.tokens) setGlobalStats(data);
-                  }).catch(() => { });
+                    console.log("[Mesh] Global Sync Success (Direct):", data);
+                    if (data && data.tokens) setGlobalStats(data);
+                  }).catch(e => console.warn("[Mesh] Global Sync Failed (Direct):", e.message));
                 }
               } catch (err) {
                 console.warn(`[Mesh] Path http://${host}:${port} failed: ${err.message}`);

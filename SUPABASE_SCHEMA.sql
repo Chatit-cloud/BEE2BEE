@@ -61,3 +61,35 @@ CREATE POLICY "Users can insert their own messages" ON public.messages FOR INSER
 CREATE POLICY "Public can read node logs" ON public.node_logs FOR SELECT USING (true);
 CREATE POLICY "Users can view all profiles for count" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Active Nodes / Mesh Discovery Table
+-- Used for P2P routing and as a public key-value store for global metrics
+CREATE TABLE IF NOT EXISTS public.active_nodes (
+    peer_id TEXT PRIMARY KEY,
+    addr TEXT NOT NULL,
+    region TEXT DEFAULT 'Global',
+    models TEXT[] DEFAULT '{}',
+    metrics JSONB DEFAULT '{}'::jsonb,
+    last_seen TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Public Access Policies for Neural Swarm
+ALTER TABLE public.active_nodes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read access for mesh map" 
+    ON public.active_nodes FOR SELECT 
+    USING (true);
+
+CREATE POLICY "Unauthenticated mesh announcement" 
+    ON public.active_nodes FOR INSERT 
+    WITH CHECK (true);
+
+CREATE POLICY "Unauthenticated telemetry updates" 
+    ON public.active_nodes FOR UPDATE 
+    USING (true);
+
+-- Maintenance: Auto-prune nodes stale for > 1 hour
+-- (Run this via pg_cron or manual cleanup)
+-- DELETE FROM active_nodes WHERE last_seen < now() - interval '1 hour';
+
