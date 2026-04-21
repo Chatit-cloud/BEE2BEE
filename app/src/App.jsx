@@ -287,10 +287,10 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
              </div>
              
              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee help</span>
-                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee create --type p2p</span>
-                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee join --url</span>
-                <span className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-emerald-400">bee2bee node --sync</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee serve-ollama</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee serve-hf</span>
+                <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white">bee2bee serve-hf-remote</span>
+                <span className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-emerald-400">bee2bee register</span>
              </div>
           </div>
           
