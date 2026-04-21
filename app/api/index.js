@@ -66,7 +66,13 @@ app.post('/api/p2p/generate', async (req, res) => {
 });
 
 // 3. STATUS - Consolidated telemetry
-app.get('/api/p2p/status', (req, res) => {
+app.post('/api/p2p/status', async (req, res) => {
+    const { action, peer } = req.body;
+    if (action === 'discover_peer' && peer && peer.addr) {
+        console.log(`[Bridge] Dynamic Discovery: Connecting to ${peer.addr}`);
+        bridge.connectToPeer(peer.addr); // This tells bridge logic to initiate WS
+        return res.json({ status: 'discovery_initiated' });
+    }
     const stats = bridge.getStats();
     const mesh = bridge.getRegionalMesh();
     res.json({

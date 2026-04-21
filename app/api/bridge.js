@@ -125,6 +125,11 @@ export class DynamicCoitHubBridge {
         }
     }
 
+    async connectToPeer(addr) {
+        if (!addr) return;
+        return this._connectPeer(addr);
+    }
+
     async syncGlobalMesh() {
         const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
         const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -255,23 +260,16 @@ export class DynamicCoitHubBridge {
             return new Promise((resolve, reject) => {
                 this.pendingRequests.set(rid, { resolve, reject, ts: Date.now() });
                 
-                // Allow up to 300s for heavy models (31B+)
+                this.pendingRequests.set(taskId, { resolve, reject, chunks: [], start: Date.now() });
+                
+                // Increased timeout for Cloud Nodes (60s)
                 setTimeout(() => {
-                    if (this.pendingRequests.has(rid)) {
-                        this.pendingRequests.delete(rid);
-                        reject(new Error('Neural Consensus Timeout (300s). The node is likely loading model or executing high-compute task.'));
+                    if (this.pendingRequests.has(taskId)) {
+                        this.pendingRequests.delete(taskId);
+                        console.error(`[Bridge] Task ${taskId} timed out on node.`);
+                        reject(new Error('Neural Node Timeout - Check GCP Firewall and Model Status'));
                     }
-                }, 300000);
-
-                this.activeWs.send(JSON.stringify({
-                    type: 'gen_request',
-                    rid,
-                    prompt: task.prompt,
-                    model: task.model,
-                    max_tokens: task.max_tokens,
-                    temperature: task.temperature,
-                    svc: task.svc || 'ollama'
-                }));
+                }, 60000);
             });
         }
 

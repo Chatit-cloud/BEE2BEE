@@ -698,29 +698,40 @@ export default function App() {
             }
 
             if (!response || !response.ok) {
-              console.warn(`[Mesh] Cloud Bridge unreachable. Attempting Neural Direct-Link...`);
+              console.warn(`[Mesh] Cloud Bridge unreachable (Status: ${response?.status}). Attempting Neural Direct-Link...`);
               
+              // Smart Node Discovery: Prioritize current active node and verified peers
               const potentialHosts = [];
+              const activeNodeIp = networkStats.activeNode?.replace('ws://', '').replace('wss://', '').split(':')[0];
               
-              // Priority 1: User's Manual Override
+              // 1. Priority: User's Manual Override
               if (manualNode) {
                  const [mHost, mPort] = manualNode.replace('http://', '').replace('https://', '').split(':');
-                 potentialHosts.push({ host: mHost, port: mPort || 8000, type: 'manual-override' });
+                 potentialHosts.push({ host: mHost, port: mPort || 3333, type: 'manual-override' });
               }
 
+              // 2. Priority: The exact IP the Mesh says is active
+              if (activeNodeIp && activeNodeIp !== 'localhost' && activeNodeIp !== '127.0.0.1') {
+                 potentialHosts.push({ host: activeNodeIp, port: 3333, type: 'active-mesh-node' });
+              }
+
+              // 3. Priority: Any other known peers in the pool
               (networkStats.peers || []).forEach(peer => {
-                const port = peer.api_port || (peer.metrics && peer.metrics.api_port) || 8000;
+                const port = peer.api_port || 3333;
                 const host = peer.api_host || peer.public_ip || (peer.addr ? peer.addr.replace('ws://', '').split(':')[0] : null);
-                if (host) potentialHosts.push({ host, port });
+                if (host && host !== 'localhost' && !potentialHosts.find(h => h.host === host)) {
+                   potentialHosts.push({ host, port, type: 'discovered-peer' });
+                }
               });
 
-              // Local fallbacks
-              [3333, 8000].forEach(port => potentialHosts.push({ host: 'localhost', port }));
+              // 4. Fallback: Localhost (only if others fail)
+              potentialHosts.push({ host: 'localhost', port: 3333, type: 'local-fallback' });
 
               let directSuccess = false;
-              for (const { host, port } of potentialHosts) {
+              for (const { host, port, type } of potentialHosts) {
                 if (directSuccess) break;
                 try {
+                  console.log(`[Mesh] Probing Neural Path (${type}): http://${host}:${port}/generate`);
                   const url = `http://${host}:${port}/generate`;
                   const localResp = await fetch(url, {
                     method: 'POST',
@@ -729,6 +740,7 @@ export default function App() {
                   });
 
                   if (localResp.ok) {
+                    console.log(`[Mesh] Synchronized via Direct-Link to ${host}`);
                     const reader = localResp.body.getReader();
                     const decoder = new TextDecoder();
                     while (true) {
@@ -739,11 +751,13 @@ export default function App() {
                     }
                     directSuccess = true;
                   }
-                } catch (err) { /* silent retry */ }
+                } catch (err) { 
+                  console.warn(`[Mesh] Path http://${host}:${port} refused connection.`);
+                }
               }
 
               if (!directSuccess) {
-                updateAIMessage("Mesh connection lost. Ensure your node is active.");
+                updateAIMessage("Mesh link failure. Ensure GCP Port 3333 is open and node is registered.");
               }
             } else {
               // Handle Cloud Stream
