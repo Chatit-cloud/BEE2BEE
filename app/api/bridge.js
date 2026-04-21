@@ -260,35 +260,50 @@ export class DynamicCoitHubBridge {
         // If a targetNode (IP:Port) is provided, we use it as a direct proxy
         if (targetNode) {
             const apiHost = targetNode.startsWith('http') ? targetNode : `http://${targetNode}`;
-            console.log(`[Bridge] Direct Proxying to Neural Node: ${apiHost}`);
-            
-            try {
-                // Direct HTTP Stream Proxy
-                const response = await fetch(`${apiHost}/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...payload, stream: true })
-                });
+            const wsAddr = apiHost.replace('http://', 'ws://').replace('https://', 'wss://');
 
-                if (!response.ok) throw new Error(`Node API error: ${response.status}`);
+            // MISSION CRITICAL: If we are already peered with this node via P2P, use the high-speed tunnel directly
+            if (this.activeUrl === wsAddr && this.activeWs && this.activeWs.readyState === WebSocket.OPEN) {
+                console.log(`[Bridge] 🚀 Using established P2P tunnel for: ${apiHost}`);
+            } else {
+                console.log(`[Bridge] 🛰️ Direct Proxying to Neural Node: ${apiHost}`);
                 
-                return new Promise((resolve, reject) => {
-                    response.body.on('data', (chunk) => {
-                        if (onChunk) onChunk(chunk.toString('utf-8'));
+                // Try Direct HTTP first for maximum speed if accessible
+                try {
+                    const response = await fetch(`${apiHost}/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...payload, stream: true }),
+                        timeout: 5000 // Fast fail for firewall check
                     });
-                    response.body.on('end', () => {
-                        resolve();
-                    });
-                    response.body.on('error', (err) => {
-                        reject(err);
-                    });
-                });
-            } catch (e) {
-                console.error(`[Bridge] Direct Proxy failed, falling back to Swarm:`, e.message);
+
+                    if (response.ok && response.body) {
+                        return new Promise((resolve, reject) => {
+                            response.body.on('data', chunk => onChunk && onChunk(chunk.toString()));
+                            response.body.on('end', resolve);
+                            response.body.on('error', reject);
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`[Bridge] Direct HTTP failed (${e.message}), switching to P2P Tunnel...`);
+                }
             }
         }
 
-        // Ensure connection is active
+        // Ensure connection is active (switching to targetNode if provided and HTTP failed/established)
+        if (targetNode) {
+            const apiHost = targetNode.startsWith('http') ? targetNode : `http://${targetNode}`;
+            const wsAddr = apiHost.replace('http://', 'ws://').replace('https://', 'wss://');
+            if (this.activeUrl !== wsAddr) {
+                console.log(`[Bridge] 🔌 Swapping P2P Tunnel to: ${wsAddr}`);
+                this.activeUrl = wsAddr;
+                if (this.activeWs) {
+                    this.activeWs.close();
+                    this.activeWs = null;
+                }
+            }
+        }
+
         if (!this.activeWs || this.activeWs.readyState !== WebSocket.OPEN) {
             await this.connect();
         }

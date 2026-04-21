@@ -67,49 +67,60 @@ body {
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 .prose-minimal {
-  @apply text-[15px] leading-[1.75] text-black font-normal;
+  @apply text-[15px] leading-[1.8] text-black font-normal;
 }
 
-.prose-minimal p { @apply mb-5; }
+.prose-minimal p { @apply mb-6; }
 .prose-minimal strong { @apply font-bold text-black; }
 
-.prose-minimal code { 
-  @apply bg-[#f0f2f5] px-1.5 py-0.5 rounded-md font-['JetBrains_Mono'] text-[0.9em] text-black; 
+.prose-minimal code:not(pre code) { 
+  @apply bg-gray-100 px-2 py-1 rounded-lg font-['JetBrains_Mono'] text-[0.85em] text-[#e01e5a] border border-gray-200; 
 }
 
 .prose-minimal pre { 
-  @apply bg-black text-white p-6 rounded-[24px] overflow-x-auto my-6 shadow-2xl shadow-black/5 selection:bg-white/20 selection:text-white;
+  @apply bg-[#0d0d0d] text-white p-8 rounded-[32px] overflow-x-auto my-8 shadow-2xl selection:bg-white/10;
   font-family: 'JetBrains_Mono', monospace !important;
+  border: 1px solid rgba(255,255,255,0.05);
 }
 
 .prose-minimal pre code { 
-  @apply bg-transparent p-0 rounded-none text-white text-[13px] leading-relaxed;
+  @apply bg-transparent p-0 rounded-none text-[#d1d1d1] text-[13px] leading-relaxed;
   background: none !important;
 }
 
 .prose-minimal h1, .prose-minimal h2, .prose-minimal h3 {
-  @apply font-bold tracking-tight text-black mt-10 mb-4 uppercase text-[11px] tracking-[0.2em] opacity-40;
+  @apply font-bold tracking-[0.25em] text-black mt-12 mb-5 uppercase text-[10px] opacity-30 border-b border-gray-50 pb-2;
 }
 
-.prose-minimal h1 { @apply text-[13px]; }
+.prose-minimal h1 { @apply text-[12px] opacity-40; }
 
 .prose-minimal ul, .prose-minimal ol { 
-  @apply pl-6 mb-6 space-y-2; 
-  list-style-type: disc;
+  @apply pl-8 mb-8 space-y-3; 
 }
 
+.prose-minimal ul { list-style-type: square; }
 .prose-minimal ol { list-style-type: decimal; }
 
-.prose-minimal li { @apply pl-2; }
+.prose-minimal li { @apply pl-3; }
 
 .prose-minimal blockquote {
-  @apply border-l-2 border-black pl-6 italic text-gray-500 my-8;
+  @apply border-l-4 border-black pl-8 italic text-gray-400 my-10 text-lg font-light;
 }
 
-.prose-minimal table { @apply w-full border-collapse my-8 text-sm; }
-.prose-minimal th, .prose-minimal td { @apply border-b border-gray-100 p-4 text-left; }
-.prose-minimal th { @apply font-bold text-black uppercase tracking-widest text-[10px]; }
+.prose-minimal table { 
+  @apply w-full border-collapse my-10 text-[13px] rounded-3xl overflow-hidden; 
+  border: 1px solid #f3f4f6;
+}
+
+.prose-minimal th, .prose-minimal td { @apply border-b border-gray-50 p-5 text-left; }
+.prose-minimal th { @apply font-bold text-black bg-gray-50/50 uppercase tracking-widest text-[9px]; }
+
+.prose-minimal hr { @apply border-gray-100 my-12; }
 
 /* Katex / Math support */
-.katex-display { @apply my-6 overflow-x-auto overflow-y-hidden; }
-.katex { @apply text-black; }
+.katex-display { 
+  @apply my-10 py-6 px-8 bg-gray-50/50 rounded-[32px] overflow-x-auto border border-gray-100; 
+}
+.katex { @apply text-black text-lg; }
+
+.prose-minimal img { @apply rounded-3xl shadow-xl my-10 border border-gray-100; }

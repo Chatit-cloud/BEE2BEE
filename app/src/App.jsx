@@ -154,7 +154,7 @@ const AnimatedTerminal = () => {
 };
 
 // --- Landing Page ---
-const Landing = ({ onStart, networkStats, globalStats }) => {
+const Landing = ({ onStart, networkStats, globalStats, meshData }) => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [subError, setSubError] = useState(false);
@@ -172,6 +172,7 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
       });
       if (res.ok) {
         setSubscribed(true);
+        if (window.clarity) window.clarity("event", "landing_lead_captured", { email: email.substring(0, 3) + '...' });
       } else {
         setSubError(true);
       }
@@ -192,58 +193,24 @@ const Landing = ({ onStart, networkStats, globalStats }) => {
         <h1 className="google-sans-title">Neural<br />Autonomous Cluster</h1>
         <p className="sub-title mx-auto">Freemium-First inference routed through a modernized<br />Javascript API bridge. 100% decentralized.</p>
 
-        <div className="flex flex-col items-center gap-6 pt-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
-          <div className="flex gap-4">
-            <button onClick={onStart} className="pill-btn bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10 text-lg py-5 px-12">
-              Enter Global Mesh
-            </button>
-            <a href="https://github.com/Chatit-cloud/BEE2BEE" target="_blank" rel="noreferrer" className="pill-btn bg-white text-black border border-gray-200 hover:bg-gray-50 hover:scale-105 active:scale-95 shadow-sm text-lg py-5 px-8 flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
-              GitHub
-            </a>
+          <div className="flex flex-col items-center gap-6 pt-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
+            <div className="flex gap-4">
+              <button onClick={() => { 
+                  if (window.clarity) window.clarity("event", "enter_mesh_clicked");
+                  onStart(); 
+                }} className="pill-btn bg-black text-white hover:scale-105 active:scale-95 shadow-xl shadow-black/10 text-lg py-5 px-12">
+                Enter Global Mesh
+              </button>
+              <a href="https://github.com/Chatit-cloud/BEE2BEE" target="_blank" rel="noreferrer" className="pill-btn bg-white text-black border border-gray-200 hover:bg-gray-50 hover:scale-105 active:scale-95 shadow-sm text-lg py-5 px-8 flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
+                GitHub
+              </a>
+            </div>
           </div>
-
-          <div className="flex flex-col items-center gap-3">
-            {subscribed ? (
-              <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-full animate-in fade-in zoom-in duration-300">✓ Subscribed for Updates</span>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div className={`flex items-center gap-2 p-1.5 pl-5 bg-white border ${subError ? 'border-red-200 shadow-red-500/5' : 'border-gray-100'} rounded-full shadow-lg hover:shadow-xl transition-all focus-within:ring-2 focus-within:ring-blue-100`}>
-                  <input
-                    value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder={subError ? "Try another email..." : "Email for changelog..."}
-                    disabled={loading}
-                    className="bg-transparent border-none outline-none text-xs w-48 font-medium"
-                  />
-                  <button
-                    onClick={handleSubscribe}
-                    disabled={loading}
-                    className={`${loading ? 'animate-pulse cursor-not-allowed' : 'hover:text-black'} bg-gray-50 text-gray-400 p-2 rounded-full transition-colors`}
-                  >
-                    {loading ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                  </button>
-                </div>
-                {subError && <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest animate-pulse">Registry Timeout. Try again.</span>}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      <div className="mt-28 grid grid-cols-2 md:grid-cols-4 gap-8 px-10">
-        <div className="text-center group">
-          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.tokens.toLocaleString()}</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Global Tokens Streamed</p>
-        </div>
-        <div className="text-center group">
-          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{networkStats?.poolSize || 0}</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Active Nodes</p>
-        </div>
-        <div className="text-center group flex flex-col items-center justify-center">
-          <p className="text-4xl md:text-5xl font-light text-black tracking-tighter">{globalStats.chats.toLocaleString()}</p>
-          <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-2 group-hover:text-blue-500">Total Neural Sessions</p>
-        </div>
-      </div>
+      {/* Stealth Mode: Counters suppressed for minimalist aesthetic */}
+
 
       <div className="mt-32 max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 relative z-10 text-left">
         {/* Team & Built By */}
@@ -476,141 +443,11 @@ const QuickRegister = ({ linkData, networkStats, fetchStats, onComplete }) => {
   );
 };
 
-// --- NEURAL FLEET TERMINAL (Formerly Mesh Explorer) ---
-const MeshExplorer = ({ meshData, onBack, onSelectNode }) => {
-  const [filterRegion, setFilterRegion] = useState('All');
+// Mesh Table Removed
 
-  const allNodes = Object.entries(meshData).flatMap(([region, nodes]) =>
-    nodes.map(n => ({ ...n, region }))
-  ).filter(n => filterRegion === 'All' || n.region === filterRegion);
-
-  const uniqueRegions = ['All', ...new Set(Object.keys(meshData))];
-
-  return (
-    <div className="min-h-screen bg-white text-black p-6 md:p-10 flex flex-col items-center selection:bg-black selection:text-white">
-      <nav className="w-full max-w-7xl flex justify-between items-center mb-16 animate-in fade-in duration-700">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-            <Activity className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-sm font-bold tracking-tight uppercase">Neural Mesh Hub</span>
-        </div>
-        <button onClick={onBack} className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-black transition-colors">← Back to Portal</button>
-      </nav>
-
-      <div className="w-full max-w-7xl space-y-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h2 className="text-4xl font-light tracking-tight">ACTIVE <span className="font-semibold">NODES</span> TERMINAL</h2>
-              <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em]">Real-time supervision of decentralized neural nodes.</p>
-            </div>
-
-            {/* Region Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Filter Region:</span>
-              <div className="flex flex-wrap gap-2">
-                {uniqueRegions.map(reg => (
-                  <button
-                    key={reg}
-                    onClick={() => setFilterRegion(reg)}
-                    className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase transition-all ${filterRegion === reg ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                  >
-                    {reg}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-10">
-            <div className="text-right">
-              <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Global Throughput</p>
-              <p className="text-2xl font-light">{(allNodes.reduce((acc, n) => acc + (parseFloat(n.metrics?.throughput) || 0), 0) || 124.5).toFixed(1)} <span className="text-xs text-gray-400 lowercase">t/s</span></p>
-            </div>
-            <div className="text-right border-l border-gray-100 pl-10">
-              <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Active Nodes</p>
-              <p className="text-2xl font-light">{allNodes.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-100 rounded-[32px] overflow-hidden shadow-2xl shadow-black/[0.02]">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-50 bg-gray-50/50">
-                <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Neural Status</th>
-                <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address & Region</th>
-                <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Models</th>
-                <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Throughput</th>
-                <th className="p-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Token Cycle</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {allNodes.map((node, i) => (
-                <tr key={i} onClick={() => onSelectNode(node)} className="group hover:bg-gray-50 transition-all cursor-pointer">
-                  <td className="p-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${node.status === 'active' || true ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-gray-200'}`} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-black">Online</span>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-mono text-black font-semibold">{node.addr || 'Cloud Ingress'}</span>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mt-1">{node.region}</span>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <div className="flex flex-wrap gap-1.5">
-                      {(node.models || ['llama3']).slice(0, 3).map((m, idx) => (
-                        <span key={idx} className="px-2 py-0.5 rounded-full bg-black text-white text-[8px] font-bold uppercase tracking-tighter">
-                          {m.split(':')[0]}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <span className="text-sm font-mono text-black">
-                      {node.metrics?.throughput || (Math.random() * 10 + 15).toFixed(1)} <span className="text-[10px] text-gray-400">t/s</span>
-                    </span>
-                  </td>
-                  <td className="p-6">
-                    <div className="w-full max-w-[120px] space-y-1.5">
-                      <div className="flex justify-between items-center text-[8px] font-bold text-gray-400 uppercase tracking-widest">
-                        <span>Load</span>
-                        <span>{Math.floor(Math.random() * 40 + 20)}%</span>
-                      </div>
-                      <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-black transition-all duration-1000"
-                          style={{ width: `${Math.random() * 80 + 10}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {allNodes.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="p-20 text-center">
-                    <div className="flex flex-col items-center gap-4 opacity-20">
-                      <Layers className="w-12 h-12 animate-bounce" />
-                      <p className="text-xs font-bold uppercase tracking-widest">Scanning Swarm Channels...</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // --- Dashboard Component (Redesigned: Gemini B&W Style) ---
-const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNode, setManualNode, onNavigate, onSend, tokenConsumption }) => {
+const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNode, setManualNode, onNavigate, onSend, tokenConsumption, genSettings, setGenSettings }) => {
   const [input, setInput] = useState('');
   const [showStats, setShowStats] = useState(false);
   const messagesEndRef = useRef(null);
@@ -713,12 +550,8 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
             </div>
           </div>
 
-          <div onClick={() => onNavigate('mesh')} className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
-            <div className="flex items-center gap-3">
-              <Globe className="w-4 h-4 text-gray-400 group-hover:text-black" />
-              <span className="text-xs font-medium hidden md:block">Mesh Map</span>
-            </div>
-          </div>
+          {/* Mesh Map Button Removed */}
+
 
           <div onClick={() => setShowStats(true)} className="p-3 md:p-4 bg-white border border-gray-100 rounded-2xl hover:border-black transition-colors cursor-pointer group">
             <div className="flex items-center gap-3">
@@ -751,23 +584,38 @@ const Dashboard = ({ networkStats, messages, isProcessing, activeModel, manualNo
 
       {/* Chat Area */}
       <main className="flex-1 flex flex-col relative">
-        {/* Top Bar */}
-        <header className="h-16 border-b border-gray-50 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${networkStats.connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                {networkStats.connected ? 'Node Active' : 'Neural Path Blocked'}
-              </span>
+        {/* Premium Neural Header */}
+        <header className="h-[100px] border-b border-black/5 flex items-center justify-between px-10 bg-white/80 backdrop-blur-2xl sticky top-0 z-50">
+          <div className="flex items-center gap-10">
+            <div className="flex items-center gap-4">
+              <div className={`w-2.5 h-2.5 rounded-full ${networkStats.connected ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]' : 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]'} animate-pulse`} />
+              <div>
+                <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-0.5">Network Status</p>
+                <p className="text-xs font-bold text-black uppercase tracking-tight">
+                  {networkStats.connected ? 'Neural Mesh Synchronized' : 'Neural Path Interrupted'}
+                </p>
+              </div>
             </div>
-            <div className="h-4 w-px bg-gray-100 hidden sm:block" />
-            <div className="hidden sm:flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5 text-black opacity-30" />
-              <span className="text-[11px] font-bold text-black uppercase tracking-tight">{activeModel}</span>
+
+            <div className="h-10 w-[1px] bg-gray-100 hidden md:block" />
+
+            <div className="hidden md:block">
+              <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mb-0.5">Active Neural Path</p>
+              <div className="flex items-center gap-2">
+                <Cpu className="w-3.5 h-3.5 text-black opacity-30" />
+                <span className="text-[11px] font-bold text-black tracking-tight uppercase">
+                  {activeModel} <span className="text-gray-300 font-medium ml-2">ID: {networkStats.activeNode?.substring(0, 12)}...</span>
+                </span>
+              </div>
             </div>
           </div>
+
           <div className="flex items-center gap-4">
-            <span className="text-[10px] font-bold text-gray-300 font-mono hidden sm:block">{networkStats.activeNode}</span>
+             {/* Mesh Registry Button Removed */}
+
+            <div className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center bg-gray-50/50 hover:bg-gray-100 transition-all cursor-pointer group">
+              <Settings className="w-4 h-4 text-black group-hover:rotate-90 transition-transform" />
+            </div>
           </div>
         </header>
 
@@ -884,7 +732,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [networkStats, setNetworkStats] = useState({ connected: false, totalPeers: 0, activeNode: 'ws://...', poolSize: 0, peers: [] });
   const [meshData, setMeshData] = useState({});
-  const [selectedModel, setSelectedModel] = useState('llama3');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('bee2bee_last_model') || 'llama3');
   const [tokenConsumption, setTokenConsumption] = useState(0);
   const [globalStats, setGlobalStats] = useState({ visits: 0, chats: 0, tokens: 0 });
   const [genSettings, setGenSettings] = useState({ maxTokens: 2048, temperature: 0.4 });
@@ -900,26 +748,31 @@ export default function App() {
       body: JSON.stringify({ visits: 1 })
     })
       .then(r => r.json())
-      .then(data => setGlobalStats(data))
+      .then(data => {
+        if (data && data.tokens) {
+          setGlobalStats(prev => ({ ...prev, ...data }));
+        }
+      })
       .catch(() => { });
   }, []);
 
-  // 1. Unified Neural Link Parser
+  // 1. Unified Neural Link Parser (Auto-Discovery from URL or Manual Paste)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const link = params.get('link');
-    const apiPort = params.get('api_port') || '3333';
+    const urlLink = params.get('link');
+    // Also support pasting the entire link into the manualNode field
+    const manualLink = manualNode && manualNode.includes('link=') ? manualNode : null;
+    const link = urlLink || manualLink;
+    const apiPort = params.get('api_port') || (link && new URL(link).searchParams.get('api_port')) || '3333';
 
-    // Deep Link & Path Router
-    if (window.location.pathname.includes('/register') || link) {
+    if ((window.location.pathname.includes('/register') || link) && link) {
       try {
-        const decodedLink = decodeURIComponent(link || '');
+        const decodedLink = decodeURIComponent(link);
         const bootstrapMatch = decodedLink.match(/bootstrap=([^&]+)/) || decodedLink.match(/peer=([^&]+)/);
         const modelMatch = decodedLink.match(/model=([^&]+)/);
 
         if (bootstrapMatch) {
           const bootstrapEnc = bootstrapMatch[1];
-          // Robust base64 decoding
           let padded = bootstrapEnc;
           const missing = 4 - (bootstrapEnc.length % 4);
           if (missing !== 4) padded = bootstrapEnc + '='.repeat(missing);
@@ -929,25 +782,36 @@ export default function App() {
           const dynamicApiUrl = `http://${nodeIp}:${apiPort}`;
           const dynamicModel = modelMatch ? decodeURIComponent(modelMatch[1]) : 'gemma3:270m';
 
-          console.log("🚀 Route Target Detected:", { dynamicApiUrl, dynamicModel });
+          console.log("🚀 Neural Identity Discovered:", { dynamicApiUrl, dynamicModel });
 
-          setManualNode(dynamicApiUrl);
+          // Prevent loop if already set
+          if (manualNode !== dynamicApiUrl && !manualLink) {
+             setManualNode(dynamicApiUrl);
+          }
+          
           setSelectedModel(dynamicModel);
           setLinkData({ link: decodedLink, model: dynamicModel });
 
+          // REGISTER GLOBALLY: This makes the node available for everyone else
           fetch('/api/p2p/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ link: decodedLink })
-          }).catch(e => console.warn("Registry Sync Pending"));
+          })
+          .then(r => r.json())
+          .then(data => {
+            console.log("[Mesh] Global Registration Success:", data);
+            if (window.clarity) window.clarity("event", "node_registered_global", { model: dynamicModel });
+            fetchStats(); // Update UI immediately
+          })
+          .catch(e => console.warn("[Mesh] Registry Sync Pending"));
 
-          setView('quick-register');
-        } else if (link) {
-          setView('quick-register');
+          if (window.clarity) window.clarity("event", "neural_link_discovered", { source: manualLink ? 'manual' : 'url' });
+          if (!manualLink) setView('quick-register');
         }
-      } catch (e) { }
+      } catch (e) { console.error("[Mesh] Parser error:", e); }
     }
-  }, []);
+  }, [manualNode]);
 
   // 1.5 Auto-Select Active Node from Swarm
   useEffect(() => {
@@ -996,7 +860,7 @@ export default function App() {
         setGlobalStats(prev => ({
           ...prev,
           ...mData,
-          tokens: Math.max(prev.tokens, mData.tokens || 0) // Avoid flickering during chat
+          tokens: Math.max(Number(prev.tokens) || 0, Number(mData.tokens) || 0)
         }));
       }
     } catch (e) {
@@ -1043,11 +907,21 @@ export default function App() {
     let host = node.addr?.split('://')[1]?.split(':')[0] || node.public_ip || node.addr?.split(':')[0];
     if (host === 'localhost' || host === '127.0.0.1') host = window.location.hostname;
 
-    const port = node.metrics?.api_port || 3333;
+    const port = node.metrics?.api_port || node.api_port || 3333;
     const apiUrl = `http://${host}:${port}`;
 
-    setManualNode(universalLink); 
+    setManualNode(apiUrl); 
     if (node.models && node.models.length > 0) setSelectedModel(node.models[0]);
+
+    // BACKGROUND SYNC: Ensure the bridge is actually peered with this node for P2P routing
+    fetch('/api/p2p/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link: universalLink })
+    }).then(r => r.json()).then(data => {
+      console.log("[Mesh] Background Peer Sync Success:", data);
+      fetchStats(); 
+    }).catch(e => console.warn("[Mesh] Background Peer Sync Pending..."));
 
     setMessages([{
       role: 'ai',
@@ -1061,11 +935,11 @@ The decentralized path to the **${node.region}** cluster is now active.
 Status: *Synchronized*`,
       metadata: { neural_path: apiUrl, mode: 'mesh-ingress', latency: node.latency || 45 }
     }]);
+    if (window.clarity) window.clarity("event", "node_selected_mesh", { region: node.region, model: node.models?.[0] });
     setView('dashboard');
   };
 
-  if (view === 'landing') return <Landing onStart={() => setView('mesh')} networkStats={networkStats} globalStats={globalStats} />;
-  if (view === 'mesh') return <MeshExplorer meshData={meshData} onBack={() => setView('landing')} onSelectNode={handleSelectNode} />;
+  if (view === 'landing') return <Landing onStart={() => setView('dashboard')} networkStats={networkStats} globalStats={globalStats} meshData={meshData} />;
   if (view === 'quick-register') return <QuickRegister linkData={linkData} networkStats={networkStats} fetchStats={fetchStats} onComplete={async () => { await fetchStats(); setView('dashboard'); }} />;
 
   return (
@@ -1078,6 +952,8 @@ Status: *Synchronized*`,
       manualNode={manualNode}
       setManualNode={setManualNode}
       onNavigate={(v) => setView(v)}
+      genSettings={genSettings}
+      setGenSettings={setGenSettings}
       onSend={async (content) => {
         if (!content.trim() || isProcessing) return;
         
@@ -1105,6 +981,7 @@ Status: *Synchronized*`,
         
         setMessages(prev => [...prev, { role: 'user', text: content }]);
         setIsProcessing(true);
+        if (window.clarity) window.clarity("event", "message_sent", { target: targetNodeResolved });
 
         const messageId = Date.now();
         setMessages(prev => [...prev, { role: 'ai', text: '', id: messageId, metadata: { streaming: true } }]);
@@ -1195,7 +1072,9 @@ Status: *Synchronized*`,
               .then(r => r.json())
               .then(data => {
                 console.log("[Mesh] Global Sync Success:", data);
-                if (data && data.tokens) setGlobalStats(data);
+                if (data && data.tokens) {
+                   setGlobalStats(prev => ({ ...prev, ...data }));
+                }
               })
               .catch(e => console.warn("[Mesh] Global Sync Failed:", e.message));
           } else {
@@ -1288,7 +1167,9 @@ Status: *Synchronized*`,
                     body: JSON.stringify({ chats: 1, tokens: finalTokens })
                   }).then(r => r.json()).then(data => {
                     console.log("[Mesh] Global Sync Success (Direct):", data);
-                    if (data && data.tokens) setGlobalStats(data);
+                    if (data && data.tokens) {
+                      setGlobalStats(prev => ({ ...prev, ...data }));
+                    }
                   }).catch(e => console.warn("[Mesh] Global Sync Failed (Direct):", e.message));
                 }
               } catch (err) {
