@@ -80,33 +80,59 @@ def generate_text_stream(model, tokenizer, device: str, prompt: str, max_new_tok
     else:
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
-    # 2. Use TextIteratorStreamer with specific delta-focused settings
-    # Ensure we use skip_prompt=True to only get the AI response
+    # 2. Use TextIteratorStreamer
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     
+    # 3. Explicit EOS tokens
+    eos_token_id = tokenizer.eos_token_id
+    if not eos_token_id and hasattr(tokenizer, 'pad_token_id'):
+        eos_token_id = tokenizer.pad_token_id
+
     gen_kwargs = {
         **inputs,
         "max_new_tokens": max_new_tokens,
         "streamer": streamer,
-        "repetition_penalty": 1.15, # Prevent infinite loops
-        "pad_token_id": tokenizer.eos_token_id
+        "repetition_penalty": 1.15,
+        "eos_token_id": eos_token_id,
+        "pad_token_id": eos_token_id
     }
     
     if temperature > 0:
         gen_kwargs["temperature"] = temperature
         gen_kwargs["do_sample"] = True
-        gen_kwargs["top_p"] = 0.9
+        gen_kwargs["top_p"] = 0.95
     else:
         gen_kwargs["do_sample"] = False
         
     thread = Thread(target=model.generate, kwargs=gen_kwargs)
     thread.start()
     
-    # 3. Yield only non-empty deltas
+    # 4. Yield only non-empty deltas with secondary stop checks
+    stop_words = ["user:", "assistant:", "<|im_end|>", "<s>", "</s>"]
+    accumulated = ""
+    
     for new_text in streamer:
         if new_text:
-            # Gemma/Llama models sometimes yield a leading space or special char in the first chunk
-            # We strip it if it's the very first part of a turn if needed, but usually streamer handles it
+            # Check for stop words in the delta
+            accumulated += new_text
+            
+            # If we detect a stop word hallucination, stop generator
+            for stop in stop_words:
+                if stop in accumulated:
+                    # Strip the stop word and yield what's before it
+                    clean_text = accumulated.split(stop)[0]
+                    if clean_text:
+                        # Only yield the difference if we already yielded some
+                        # But here we are yielding in chunks, so it's trickier.
+                        # For simplicity, we just yield the chunk if it doesn't contain the stop yet.
+                        pass # handled below
+                    
+                    # If stop hit, we just yield nothing more and return
+                    # We need to find how much of the CURRENT chunk to yield
+                    if stop in new_text:
+                        yield new_text.split(stop)[0]
+                    return
+
             yield new_text
 
 

@@ -814,7 +814,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('llama3');
   const [tokenConsumption, setTokenConsumption] = useState(0);
   const [globalStats, setGlobalStats] = useState({ visits: 0, chats: 0, tokens: 0 });
-  const [genSettings, setGenSettings] = useState({ maxTokens: 2048, temperature: 0.7 });
+  const [genSettings, setGenSettings] = useState({ maxTokens: 2048, temperature: 0.4 });
 
   useEffect(() => {
     fetch('/api/p2p/global_metrics', {
@@ -957,14 +957,20 @@ export default function App() {
             ));
           };
 
+          const currentHistory = [...messages, { role: 'user', text: content }];
+          const fullContextPrompt = currentHistory
+              .filter(m => m.text && m.text.trim())
+              .map(m => `${m.role === 'ai' ? 'assistant' : 'user'}: ${m.text.trim()}`)
+              .join('\n');
+
           try {
             const payload = { 
-              prompt: content, 
+              prompt: fullContextPrompt, 
               model: selectedModel, 
               stream: true, 
               max_tokens: genSettings.maxTokens,
               temperature: genSettings.temperature,
-              targetNode: manualNode // Pass the dynamic node to the bridge
+              targetNode: manualNode 
             };
             let response;
             
