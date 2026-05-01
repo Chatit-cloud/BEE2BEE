@@ -5,7 +5,8 @@ import time
 import base64
 from typing import Any, Dict, List, Optional, Tuple
 import websockets
-from websockets.asyncio.server import serve, ServerConnection
+from websockets.asyncio.server import serve, ServerConnection, Response
+from websockets.datastructures import Headers
 from websockets.asyncio.client import connect, ClientConnection
 from rich.console import Console
 from loguru import logger
@@ -151,32 +152,30 @@ class P2PNode:
     async def start(self):
         logger.info(f"Starting P2P Node on {self.host}:{self.port}")
         
-        async def _process_request(path, request_headers):
-            """Handle non-websocket requests (like OPTIONS preflight)."""
-            # Return 200 OK for OPTIONS requests (CORS preflight)
-            if request_headers.get("method", "").upper() == "OPTIONS":
-                return (
-                    http.HTTPStatus.OK,
-                    [
-                        ("Access-Control-Allow-Origin", "*"),
-                        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
-                        ("Access-Control-Allow-Headers", "*"),
-                        ("Access-Control-Max-Age", "86400"),
-                    ],
-                    b"",
-                )
-            # Let websocket requests pass through
+        async def _process_request(connection: ServerConnection, request):
+            """Handle non-websocket requests (like health checks)."""
+            # In websockets v16.0+, Request object only supports GET and doesn't have a .method attribute.
+            # CORS preflight (OPTIONS) is rejected at the protocol level before reaching here.
+            # We return None to let the handshake proceed for GET requests.
             return None
 
-        async def handler(ws: WebSocketServerProtocol):
+        async def _process_response(connection: ServerConnection, request, response: Response):
+            """Add CORS headers to all responses, including handshake."""
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+
+        async def handler(ws: ServerConnection):
             await self._handle_connection(ws)
 
         import http
         try:
-            self.server = await websockets.serve(
+            self.server = await serve(
                 handler, self.host, self.port, 
                 max_size=32 * 1024 * 1024,
-                process_request=_process_request
+                process_request=_process_request,
+                process_response=_process_response
             )
             self._running = True
             logger.success("WebSocket server started successfully")
